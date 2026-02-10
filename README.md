@@ -56,9 +56,69 @@ A multi-chain Discord bot for NFT ownership verification, activity tracking, lea
 
 ---
 
-## Operation Guide
+## Quick Start
 
-Follow these steps in order to deploy and configure the bot.
+```bash
+git clone https://github.com/xka0085-byte/AetherGuard.git
+cd AetherGuard
+npm install
+npm run setup    # Interactive wizard - creates .env for you
+npm start
+```
+
+The setup wizard will guide you through entering your Discord Token, Client ID, and Alchemy API Key. No manual file editing needed.
+
+---
+
+## Deployment Options
+
+### Option A: Standard (Node.js)
+
+Best for: local development, VPS, any server with Node.js
+
+```bash
+git clone https://github.com/xka0085-byte/AetherGuard.git
+cd AetherGuard
+npm install
+npm run setup
+npm start
+```
+
+### Option B: Docker
+
+Best for: production servers, isolated environments
+
+```bash
+git clone https://github.com/xka0085-byte/AetherGuard.git
+cd AetherGuard
+npm run setup          # Create .env first
+docker-compose up -d   # Start in background
+```
+
+Useful Docker commands:
+```bash
+docker-compose logs -f    # View logs
+docker-compose restart    # Restart bot
+docker-compose down       # Stop bot
+```
+
+### Option C: One-Click Deploy
+
+Deploy directly to a cloud platform (no local setup needed):
+
+| Platform | Free Tier | Deploy |
+|----------|-----------|--------|
+| [Railway](https://railway.app) | 500 hours/month | Fork repo > New Project > Deploy from GitHub |
+| [Render](https://render.com) | Free for background workers | Fork repo > New Background Worker > Connect repo |
+
+After deploying, set these environment variables in the platform dashboard:
+- `DISCORD_TOKEN`
+- `DISCORD_CLIENT_ID`
+- `ALCHEMY_API_KEY`
+
+---
+
+## Detailed Setup Guide
 
 ### Step 1: Create a Discord Application
 
@@ -72,8 +132,8 @@ Follow these steps in order to deploy and configure the bot.
 2. Click **"Reset Token"** and copy the token (this is your `DISCORD_TOKEN`)
    - **Important:** Store this token securely. You will not be able to see it again.
 3. Enable the following **Privileged Gateway Intents** (scroll down on the Bot page):
-   - **SERVER MEMBERS INTENT** ✅ - Required for detecting new members and fetching member info
-   - **MESSAGE CONTENT INTENT** ✅ - Required for activity tracking (message length validation)
+   - **SERVER MEMBERS INTENT** - Required for detecting new members and fetching member info
+   - **MESSAGE CONTENT INTENT** - Required for activity tracking (message length validation)
 
    **Note:** The bot also uses these intents (enabled by default, no action needed):
    - Guilds (default) - Access to guild information
@@ -89,31 +149,35 @@ Follow these steps in order to deploy and configure the bot.
 3. Copy your **API Key** from the app dashboard (this is your `ALCHEMY_API_KEY`)
    - The same API key works for Ethereum, Polygon, and Base queries
 
-### Step 4: Install Dependencies
+### Step 4: Install and Configure
 
 ```bash
-# Clone or download the project
+# Clone the project
 git clone https://github.com/xka0085-byte/AetherGuard.git
 cd AetherGuard
 
 # Install dependencies
 npm install
+
+# Run the setup wizard (creates .env automatically)
+npm run setup
 ```
 
 Requirements:
 - Node.js >= 18
 - npm (comes with Node.js)
 
-### Step 5: Configure Environment Variables
+**Manual configuration (alternative to setup wizard):**
 
 ```bash
-# Copy the example config
 cp .env.example .env
-
 # Edit .env with your values
 ```
 
-**Required variables:**
+<details>
+<summary>Click to see all environment variables</summary>
+
+**Required:**
 
 | Variable | Description |
 |----------|-------------|
@@ -121,7 +185,7 @@ cp .env.example .env
 | `DISCORD_CLIENT_ID` | Application ID from Step 1 |
 | `ALCHEMY_API_KEY` | Alchemy API key from Step 3 |
 
-**Optional variables:**
+**Optional:**
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -139,7 +203,9 @@ cp .env.example .env
 | `SUBSCRIPTION_GRACE_DAYS` | `3` | Grace period after subscription expires |
 | `FOUNDING_LIMIT` | `50` | Number of early guilds that get free access |
 
-### Step 6: Invite the Bot to Your Server
+</details>
+
+### Step 5: Invite the Bot to Your Server
 
 1. Go back to the [Discord Developer Portal](https://discord.com/developers/applications), select your application
 2. In the left sidebar, click **"OAuth2"**
@@ -156,7 +222,7 @@ cp .env.example .env
 4. Copy the generated URL at the bottom and open it in your browser
 5. Select the server you want to add the bot to, and click **Authorize**
 
-Alternatively, use this URL (replace `YOUR_CLIENT_ID`):
+Or use this URL (replace `YOUR_CLIENT_ID`):
 
 ```
 https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=269569088&scope=bot%20applications.commands
@@ -164,7 +230,7 @@ https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=26
 
 **Important:** Make sure the bot's role is placed **above** the verified role in your server's role hierarchy (Server Settings > Roles). The bot cannot assign roles that are higher than its own role.
 
-### Step 7: Start the Bot
+### Step 6: Start the Bot
 
 ```bash
 # Standard start
@@ -175,6 +241,9 @@ npm run dev
 
 # Production with PM2 (recommended for servers)
 npm run start:pm2
+
+# Docker
+docker-compose up -d
 ```
 
 You should see output like:
@@ -185,7 +254,7 @@ You should see output like:
 ✅ All modules initialized
 ```
 
-### Step 8: Configure Your Server
+### Step 7: Configure Your Server
 
 Once the bot is online and in your server:
 
@@ -294,6 +363,8 @@ When enabled via `/activity-setup nft_bonus:True`:
 ├── index.js                  # Main entry point (commands, events, cron)
 ├── config.js                 # Configuration (env vars, defaults)
 ├── ecosystem.config.js       # PM2 process manager config
+├── Dockerfile                # Docker container definition
+├── docker-compose.yml        # Docker Compose configuration
 ├── refresh-commands.js       # Utility: force re-register slash commands
 ├── .env.example              # Environment variables template
 ├── package.json
@@ -309,11 +380,12 @@ When enabled via `/activity-setup nft_bonus:True`:
 │   └── payment.js            # On-chain payment verification (ERC-20)
 ├── utils/
 │   └── securityLogger.js     # Security events, audit logs, behavior tracking
+├── scripts/
+│   └── setup.js              # Interactive setup wizard
 ├── logs/                     # Generated log files
 │   ├── security.log
 │   ├── audit.log
 │   └── user_activity.log
-└── scripts/                  # Utility scripts
 ```
 
 ## Troubleshooting

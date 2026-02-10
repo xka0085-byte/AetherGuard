@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  aetherguard:
+    build: .
+    container_name: aetherguard-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Persist database and logs outside container
+      - ./data.db:/app/data.db
+      - ./logs:/app/logs
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=./data.db

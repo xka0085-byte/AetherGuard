@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "setup": "node scripts/setup.js",
     "start:pm2": "pm2 start ecosystem.config.js",
     "dev": "node --watch index.js"
   },
