@@ -72,8 +72,14 @@ Follow these steps in order to deploy and configure the bot.
 2. Click **"Reset Token"** and copy the token (this is your `DISCORD_TOKEN`)
    - **Important:** Store this token securely. You will not be able to see it again.
 3. Enable the following **Privileged Gateway Intents** (scroll down on the Bot page):
-   - **SERVER MEMBERS INTENT** - Required for detecting new members and fetching member info
-   - **MESSAGE CONTENT INTENT** - Required for activity tracking (message length validation)
+   - **SERVER MEMBERS INTENT** ✅ - Required for detecting new members and fetching member info
+   - **MESSAGE CONTENT INTENT** ✅ - Required for activity tracking (message length validation)
+
+   **Note:** The bot also uses these intents (enabled by default, no action needed):
+   - Guilds (default) - Access to guild information
+   - Guild Messages (default) - Receive message events
+   - Guild Message Reactions (default) - Track reactions for activity scoring
+   - Guild Voice States (default) - Track voice channel activity
 4. Click **Save Changes**
 
 ### Step 3: Get an Alchemy API Key
