@@ -1,23 +1,23 @@
 /**
- * 半自动化测试验证脚本
- * 使用方法：
- *   1. 手动在Discord执行测试操作
- *   2. 运行：node test-verify.js <test_name> <guild_id> <user_id>
+ * Semi-automated test verification script
+ * Usage:
+ *   1. Manually perform test actions in Discord
+ *   2. Run: node test-verify.js <test_name> <guild_id> <user_id>
  *
- * 测试项：
- *   - daily-cap: 验证每日积分上限
- *   - duplicate: 验证重复消息检测
- *   - nft-bonus: 验证NFT持有量加成
- *   - all: 运行所有验证
+ * Test items:
+ *   - daily-cap: Verify daily point caps
+ *   - duplicate: Verify duplicate message detection
+ *   - nft-bonus: Verify NFT holding bonus
+ *   - all: Run all verifications
  */
 
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-// 数据库路径
+// Database path
 const DB_PATH = path.join(__dirname, 'data.db');
 
-// 颜色输出
+// Color output
 const colors = {
   green: '\x1b[32m',
   red: '\x1b[31m',
@@ -35,7 +35,7 @@ function error(message) { log('❌', 'red', message); }
 function info(message) { log('📊', 'blue', message); }
 function warn(message) { log('⚠️', 'yellow', message); }
 
-// 数据库查询封装
+// Database query wrapper
 function dbGet(query, params = []) {
   return new Promise((resolve, reject) => {
     const db = new sqlite3.Database(DB_PATH);
@@ -59,12 +59,12 @@ function dbAll(query, params = []) {
 }
 
 // ============================================
-// 测试1：每日积分上限验证
+// Test 1: Daily Point Cap Verification
 // ============================================
 async function testDailyCap(guildId, userId) {
   info('Testing daily point caps...');
 
-  // 获取活跃度设置
+  // Get activity settings
   const settings = await dbGet(
     'SELECT * FROM activity_settings WHERE guild_id = ?',
     [guildId]
@@ -80,7 +80,7 @@ async function testDailyCap(guildId, userId) {
     return false;
   }
 
-  // 获取用户活跃度数据
+  // Get user activity data
   const activity = await dbGet(
     'SELECT * FROM activity_tracking WHERE guild_id = ? AND user_id = ?',
     [guildId, userId]
@@ -97,7 +97,7 @@ async function testDailyCap(guildId, userId) {
   console.log(`  Reactions: ${activity.daily_reactions}/${settings.daily_reaction_cap}`);
   console.log(`  Voice: ${activity.daily_voice}/${settings.daily_voice_cap} min`);
 
-  // 检查是否接近上限
+  // Check if close to the cap
   const tests = [
     { name: 'Messages', current: activity.daily_messages, cap: settings.daily_message_cap },
     { name: 'Replies', current: activity.daily_replies, cap: settings.daily_reply_cap },
@@ -117,7 +117,7 @@ async function testDailyCap(guildId, userId) {
     }
   }
 
-  // 检查今日重置日期
+  // Check today's reset date
   const today = new Date().toISOString().split('T')[0];
   if (activity.daily_reset_date === today) {
     success('Daily reset date is today - counters are fresh');
@@ -129,7 +129,7 @@ async function testDailyCap(guildId, userId) {
 }
 
 // ============================================
-// 测试2：重复消息检测（间接验证）
+// Test 2: Duplicate Message Detection (Indirect Verification)
 // ============================================
 async function testDuplicateDetection(guildId, userId) {
   info('Testing duplicate message detection...');
@@ -150,7 +150,7 @@ async function testDuplicateDetection(guildId, userId) {
   console.log(`  Daily messages: ${activity.daily_messages}`);
   console.log(`  Total score: ${activity.total_score}`);
 
-  // 如果用户发了很多消息但计数很低，说明重复检测在工作
+  // If user sends many messages but the count is low, it means duplicate detection is working
   if (activity.daily_messages < 5) {
     warn('Send more messages to test duplicate detection (at least 5)');
   } else {
@@ -161,12 +161,12 @@ async function testDuplicateDetection(guildId, userId) {
 }
 
 // ============================================
-// 测试3：NFT持有量加成验证
+// Test 3: NFT Holding Bonus Verification
 // ============================================
 async function testNftBonus(guildId, userId) {
   info('Testing NFT holding bonus...');
 
-  // 获取活跃度设置
+  // Get activity settings
   const settings = await dbGet(
     'SELECT * FROM activity_settings WHERE guild_id = ?',
     [guildId]
@@ -177,7 +177,7 @@ async function testNftBonus(guildId, userId) {
     return false;
   }
 
-  // 获取用户NFT余额
+  // Get user NFT balance
   const verifiedUser = await dbGet(
     'SELECT * FROM verified_users WHERE guild_id = ? AND user_id = ?',
     [guildId, userId]
@@ -190,7 +190,7 @@ async function testNftBonus(guildId, userId) {
 
   const nftBalance = verifiedUser.nft_balance;
 
-  // 计算预期倍率
+  // Calculate expected multiplier
   let expectedMultiplier = 1.0;
   if (nftBalance >= settings.nft_tier3_count) {
     expectedMultiplier = settings.nft_tier3_multiplier;
@@ -207,7 +207,7 @@ async function testNftBonus(guildId, userId) {
   console.log(`  Tier 2 (${settings.nft_tier2_count}+ NFT): ${settings.nft_tier2_multiplier}x`);
   console.log(`  Tier 3 (${settings.nft_tier3_count}+ NFT): ${settings.nft_tier3_multiplier}x`);
 
-  // 获取活跃度数据
+  // Get activity data
   const activity = await dbGet(
     'SELECT * FROM activity_tracking WHERE guild_id = ? AND user_id = ?',
     [guildId, userId]
@@ -218,7 +218,7 @@ async function testNftBonus(guildId, userId) {
     return true;
   }
 
-  // 计算基础分数（无倍率）
+  // Calculate base score (without multiplier)
   const baseScore =
     activity.message_count * settings.message_score +
     activity.reply_count * settings.reply_score +
@@ -233,7 +233,7 @@ async function testNftBonus(guildId, userId) {
   console.log(`  Expected Score (with ${expectedMultiplier}x): ${expectedScore}`);
   console.log(`  Actual Score: ${actualScore}`);
 
-  // 允许小误差（因为浮点运算和实时更新）
+  // Allow small error (due to floating point operations and real-time updates)
   const tolerance = 2;
   if (Math.abs(actualScore - expectedScore) < tolerance) {
     success('NFT bonus multiplier is working correctly!');
@@ -248,7 +248,7 @@ async function testNftBonus(guildId, userId) {
 }
 
 // ============================================
-// 测试4：综合概览
+// Test 4: Comprehensive Overview
 // ============================================
 async function testAll(guildId, userId) {
   console.log('\n' + '='.repeat(60));
@@ -286,7 +286,7 @@ async function testAll(guildId, userId) {
 }
 
 // ============================================
-// 主程序
+// Main Program
 // ============================================
 async function main() {
   const args = process.argv.slice(2);

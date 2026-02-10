@@ -1,13 +1,13 @@
 /**
  * ============================================
- * AetherGuard Discord NFT Bot - 配置文件
+ * AetherGuard Discord NFT Bot - Configuration File
  * ============================================
- * 修改说明：
- * - 删除了整个 SUBSCRIPTION_PLANS 对象（FREE/COMMUNITY/PRO）
- * - 删除了 ALCHEMY_NETWORK 配置（固定为 eth-mainnet）
- * - 删除了所有 Redis 相关配置
- * - 删除了 API 服务器相关配置
- * - 从128行精简为约60行
+ * Change Notes:
+ * - Removed the entire SUBSCRIPTION_PLANS object (FREE/COMMUNITY/PRO)
+ * - Removed ALCHEMY_NETWORK config (fixed to eth-mainnet)
+ * - Removed all Redis-related configuration
+ * - Removed API server-related configuration
+ * - Reduced from 128 lines to approximately 60 lines
  * ============================================
  */
 
@@ -15,7 +15,7 @@ require('dotenv').config();
 
 module.exports = {
     // ============================================
-    // Discord 配置
+    // Discord Configuration
     // ============================================
     discord: {
         token: process.env.DISCORD_TOKEN,
@@ -23,20 +23,20 @@ module.exports = {
     },
 
     // ============================================
-    // Alchemy API 配置（区块链查询）
+    // Alchemy API Configuration (Blockchain Queries)
     // ============================================
     alchemy: {
         apiKey: process.env.ALCHEMY_API_KEY,
-        // API 请求超时时间（毫秒）
+        // API request timeout (milliseconds)
         timeout: 10000,
-        // 请求失败重试次数
+        // Number of retries on request failure
         retryCount: 3,
-        // 重试间隔（毫秒）
+        // Retry interval (milliseconds)
         retryDelay: 1000,
     },
 
     // ============================================
-    // 支持的区块链网络
+    // Supported Blockchain Networks
     // ============================================
     networks: {
         ethereum: {
@@ -59,81 +59,81 @@ module.exports = {
         },
     },
 
-    // 默认网络
+    // Default network
     defaultNetwork: 'ethereum',
 
     // ============================================
-    // 数据库配置（SQLite）
+    // Database Configuration (SQLite)
     // ============================================
     database: {
-        // SQLite 数据库文件路径
+        // SQLite database file path
         path: process.env.DATABASE_PATH || './data.db',
     },
 
     // ============================================
-    // 活跃度追踪配置
+    // Activity Tracking Configuration
     // ============================================
     activity: {
-        // 是否启用活跃度追踪
+        // Whether to enable activity tracking
         enabled: process.env.ACTIVITY_ENABLED !== 'false',
 
-        // 活跃度计分规则
+        // Activity scoring rules
         scoring: {
-            message: 1,      // 发送消息 +1 分
-            reply: 2,        // 回复消息 +2 分
-            reaction: 0.5,   // 添加反应 +0.5 分
-            voicePerMinute: 0.1,  // 语音每分钟 +0.1 分
+            message: 1,      // Send message +1 point
+            reply: 2,        // Reply to message +2 points
+            reaction: 0.5,   // Add reaction +0.5 points
+            voicePerMinute: 0.1,  // Voice per minute +0.1 points
         },
 
-        // 消息限制
-        minMessageLength: 3,    // 最小消息长度
-        cooldownMs: 10000,      // 冷却时间（毫秒）
+        // Message limits
+        minMessageLength: 3,    // Minimum message length
+        cooldownMs: 10000,      // Cooldown time (milliseconds)
 
-        // 内存队列配置（替代 Redis）
+        // In-memory queue configuration (replaces Redis)
         queue: {
-            // 批量处理大小
+            // Batch processing size
             batchSize: 50,
-            // 处理间隔（毫秒）
+            // Processing interval (milliseconds)
             processInterval: 5000,
         },
     },
 
     // ============================================
-    // NFT 验证配置
+    // NFT Verification Configuration
     // ============================================
     verification: {
-        // 验证结果缓存时间（秒）
-        cacheTTL: 300,  // 5分钟
-        // 定期检查间隔（小时）
+        // Verification result cache duration (seconds)
+        cacheTTL: 300,  // 5 minutes
+        // Periodic check interval (hours)
         checkInterval: 24,
-        // 默认踢出延迟（小时）
+        // Default kick delay (hours)
         defaultKickDelay: 24,
     },
 
     // ============================================
-    // 排行榜配置
+    // Leaderboard Configuration
     // ============================================
     leaderboard: {
-        // 默认显示数量
+        // Default display count
         defaultLimit: 10,
-        // 最大显示数量
+        // Maximum display count
         maxLimit: 50,
     },
 
     // ============================================
-    // 支付配置（多链多币种：链上转账 + tx 提交）
+    // Payment Configuration (Multi-chain, multi-token: on-chain transfer + tx submission)
     // ============================================
     payments: {
         enabled: process.env.PAYMENTS_ENABLED !== 'false',
-        // 收款地址（EVM 通用，所有链共用同一个地址）
+        // Receiver address (EVM universal, same address shared across all chains)
         receiver: (process.env.PAY_RECEIVER || '').toLowerCase(),
-        // 订阅价格（单位：代币最小面值的整数，如 5 = 5 USDC）
+        // Subscription price (unit: token smallest denomination, e.g. 5 = 5 USDC)
         price: process.env.PAY_PRICE || '5',
-        // 最低确认数
+        // Minimum confirmations
         minConfirmations: parseInt(process.env.PAY_MIN_CONFIRMATIONS || '1', 10),
-        // 可选：订阅角色ID
+        // Optional: subscriber role ID
         subscriberRoleId: process.env.SUBSCRIBER_ROLE_ID || null,
-        // 接受的代币列表（合约地址为链上常量，无需 .env）
+        // Accepted token list (contract addresses are on-chain constants, no .env needed)
         acceptedTokens: [
             // --- Polygon ---
             { chain: 'polygon', symbol: 'USDC', contract: '0x3c499c542cef5e3811e1192ce70d8cc03d5c3359', decimals: 6 },
@@ -147,29 +147,29 @@ module.exports = {
     },
 
     // ============================================
-    // 订阅配置
+    // Subscription Configuration
     // ============================================
     subscription: {
-        // 当前阶段：beta（前50免费）或 paid（开始收费）
+        // Current phase: beta (first 50 free) or paid (start charging)
         phase: process.env.SUBSCRIPTION_PHASE || 'beta',
-        // 每次订阅时长（天）
+        // Duration per subscription (days)
         durationDays: parseInt(process.env.SUBSCRIPTION_DURATION_DAYS || '30', 10),
-        // 过期后宽限期（天）
+        // Grace period after expiration (days)
         graceDays: parseInt(process.env.SUBSCRIPTION_GRACE_DAYS || '3', 10),
-        // 早鸟上限（第N个加入的服务器永久优惠）
+        // Early bird limit (the Nth server to join gets permanent free access)
         foundingLimit: parseInt(process.env.FOUNDING_LIMIT || '50', 10),
     },
 
     // ============================================
-    // 机器人拥有者
+    // Bot Owner
     // ============================================
     botOwnerId: process.env.BOT_OWNER_ID || null,
 
     // ============================================
-    // 命令冷却配置
+    // Command Cooldown Configuration
     // ============================================
     cooldown: {
-        // 冷却时间（毫秒）
-        time: 5000,  // 5秒
+        // Cooldown time (milliseconds)
+        time: 5000,  // 5 seconds
     },
 };

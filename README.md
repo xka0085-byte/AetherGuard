@@ -339,6 +339,16 @@ Users need to enable "Allow direct messages from server members" in their Discor
 - During the beta phase, the first 50 guilds have free access.
 - After switching to paid phase, use `/subscribe` to see payment instructions, then `/pay` to activate.
 
+## Support the Project
+
+If you find AetherGuard useful, consider supporting development with a donation:
+
+**Wallet Address:** `0xc70f7c61caa5c8d88f7cdeb022683d9a15199948`
+
+Accepted on any EVM chain (Ethereum, Polygon, Base, Arbitrum, Optimism, etc.)
+
+**Want a hosted version?** Contact me for managed hosting — no setup required.
+
 ## License
 
 MIT License

@@ -1,32 +1,32 @@
 /**
- * 文件名：leaderboard.js
- * 用途：排行榜模块（简化版）
+ * Filename: leaderboard.js
+ * Purpose: Leaderboard module (simplified version)
  *
- * 测试方法：
- * 1. 启动机器人
- * 2. 在服务器运行 /leaderboard
- * 3. 应该显示本周排行榜
+ * Test Method:
+ * 1. Start bot
+ * 2. Run /leaderboard in the guild
+ * 3. Should show this week's leaderboard
  *
- * 改动说明：
- * - 删除 API 相关函数（getLeaderboardForAPI）
- * - 删除周数据保存（简化为只显示当前周）
- * - 从 343 行简化为 ~150 行
+ * Change Notes:
+ * - Removed API related functions (getLeaderboardForAPI)
+ * - Removed weekly data saving (simplified to show current week only)
+ * - Simplified from 343 lines to ~150 lines
  */
 
 const cron = require('node-cron');
 const db = require('../database/db');
 
-// Discord 客户端引用
+// Discord client reference
 let discordClient = null;
 
 /**
- * 初始化排行榜模块
- * @param {Client} client - Discord.js 客户端实例
+ * Initialize leaderboard module
+ * @param {Client} client - Discord.js client instance
  */
 function initLeaderboard(client) {
   discordClient = client;
 
-  // 计划每周一 00:00 UTC 发布排行榜并重置
+  // Schedule weekly leaderboard posting and reset every Monday at 00:00 UTC
   cron.schedule('0 0 * * 1', async () => {
     console.log('📊 Running weekly leaderboard job...');
     await generateAndPostAllLeaderboards();
@@ -38,20 +38,20 @@ function initLeaderboard(client) {
 }
 
 /**
- * 获取当前周的日期范围
+ * Get the date range of the current week
  * @returns {{ weekStart: Date, weekEnd: Date }}
  */
 function getCurrentWeekRange() {
   const now = new Date();
   const dayOfWeek = now.getUTCDay();
 
-  // 计算本周一
+  // Calculate this Monday
   const thisMonday = new Date(now);
   const daysToThisMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
   thisMonday.setUTCDate(now.getUTCDate() - daysToThisMonday);
   thisMonday.setUTCHours(0, 0, 0, 0);
 
-  // 计算本周日
+  // Calculate this Sunday
   const thisSunday = new Date(thisMonday);
   thisSunday.setUTCDate(thisMonday.getUTCDate() + 6);
   thisSunday.setUTCHours(23, 59, 59, 999);
@@ -63,8 +63,8 @@ function getCurrentWeekRange() {
 }
 
 /**
- * 格式化日期
- * @param {Date} date - 日期
+ * Format date
+ * @param {Date} date - Date
  * @returns {string}
  */
 function formatDate(date) {
@@ -75,15 +75,15 @@ function formatDate(date) {
 }
 
 /**
- * 生成排行榜
- * @param {string} guildId - 服务器ID
- * @param {number} topN - 前 N 名（默认: 10）
+ * Generate leaderboard
+ * @param {string} guildId - Guild ID
+ * @param {number} topN - Top N (default: 10)
  * @returns {Promise<Array>}
  */
 async function generateLeaderboard(guildId, topN = 10) {
   const leaderboard = await db.getLeaderboard(guildId, topN);
 
-  // 如果有 Discord 客户端，获取用户名
+  // If Discord client exists, fetch username
   if (discordClient) {
     for (const entry of leaderboard) {
       try {
@@ -99,9 +99,9 @@ async function generateLeaderboard(guildId, topN = 10) {
 }
 
 /**
- * 发布排行榜到指定频道
- * @param {string} guildId - 服务器ID
- * @param {boolean} resetAfter - 发布后是否重置分数
+ * Post leaderboard to the specified channel
+ * @param {string} guildId - Guild ID
+ * @param {boolean} resetAfter - Whether to reset scores after posting
  */
 async function postLeaderboard(guildId, resetAfter = false) {
   if (!discordClient) {
@@ -130,10 +130,10 @@ async function postLeaderboard(guildId, resetAfter = false) {
       return;
     }
 
-    // 获取日期范围
+    // Get date range
     const { weekStart, weekEnd } = getCurrentWeekRange();
 
-    // 生成排行榜
+    // Generate leaderboard
     const leaderboard = await generateLeaderboard(guildId, 10);
 
     if (leaderboard.length === 0) {
@@ -158,7 +158,7 @@ async function postLeaderboard(guildId, resetAfter = false) {
     await channel.send(message);
     console.log(`✅ Posted leaderboard to guild ${guildId}`);
 
-    // 重置分数
+    // Reset scores
     if (resetAfter) {
       await db.resetWeeklyScores(guildId);
       console.log(`🔄 Reset weekly scores for guild ${guildId}`);
@@ -169,7 +169,7 @@ async function postLeaderboard(guildId, resetAfter = false) {
 }
 
 /**
- * 为所有已配置的服务器生成并发布排行榜
+ * Generate and post leaderboards for all configured guilds
  */
 async function generateAndPostAllLeaderboards() {
   if (!discordClient) {
@@ -186,7 +186,7 @@ async function generateAndPostAllLeaderboards() {
       console.error(`❌ Error processing guild ${guildId}:`, error.message);
     }
 
-    // 小延迟避免速率限制
+    // Small delay to avoid rate limiting
     await new Promise((r) => setTimeout(r, 1000));
   }
 

@@ -1,28 +1,28 @@
 /**
- * 文件名：securityLogger.js
- * 用途：安全事件日志和管理员操作审计
+ * Filename: securityLogger.js
+ * Purpose: Security event logging and administrator operation auditing
  *
- * 功能：
- * 1. 安全事件日志（验证失败、速率限制、异常行为）
- * 2. 管理员操作审计（配置变更记录）
- * 3. 用户行为追踪（Discord无法获取IP，但可追踪用户行为模式）
+ * Features:
+ * 1. Security event logs (verification failure, rate limiting, abnormal behavior)
+ * 2. Administrator operation auditing (configuration change records)
+ * 3. User behavior tracking (Discord cannot get IP, but can track user behavior patterns)
  */
 
 const fs = require('fs');
 const path = require('path');
 
-// 日志文件路径
+// Log file paths
 const LOG_DIR = path.join(__dirname, '..', 'logs');
 const SECURITY_LOG = path.join(LOG_DIR, 'security.log');
 const AUDIT_LOG = path.join(LOG_DIR, 'audit.log');
 const USER_ACTIVITY_LOG = path.join(LOG_DIR, 'user_activity.log');
 
-// 确保日志目录存在
+// Ensure log directory exists
 if (!fs.existsSync(LOG_DIR)) {
   fs.mkdirSync(LOG_DIR, { recursive: true });
 }
 
-// 日志级别
+// Log levels
 const LOG_LEVELS = {
   INFO: 'INFO',
   WARN: 'WARN',
@@ -30,56 +30,56 @@ const LOG_LEVELS = {
   CRITICAL: 'CRITICAL'
 };
 
-// 安全事件类型
+// Security event types
 const SECURITY_EVENTS = {
-  // 验证相关
+  // Verification related
   VERIFY_SUCCESS: 'VERIFY_SUCCESS',
   VERIFY_FAILED: 'VERIFY_FAILED',
   VERIFY_INVALID_ADDRESS: 'VERIFY_INVALID_ADDRESS',
 
-  // 速率限制
+  // Rate limiting
   RATE_LIMIT_COMMAND: 'RATE_LIMIT_COMMAND',
   RATE_LIMIT_VERIFY: 'RATE_LIMIT_VERIFY',
   RATE_LIMIT_SPAM: 'RATE_LIMIT_SPAM',
 
-  // 异常行为
+  // Abnormal behavior
   SUSPICIOUS_ACTIVITY: 'SUSPICIOUS_ACTIVITY',
   DAILY_CAP_REACHED: 'DAILY_CAP_REACHED',
   DUPLICATE_MESSAGE: 'DUPLICATE_MESSAGE',
 
-  // 系统事件
+  // System events
   BOT_STARTED: 'BOT_STARTED',
   BOT_SHUTDOWN: 'BOT_SHUTDOWN',
   DATABASE_ERROR: 'DATABASE_ERROR',
   API_ERROR: 'API_ERROR'
 };
 
-// 审计事件类型
+// Audit event types
 const AUDIT_EVENTS = {
-  // 配置变更
+  // Configuration changes
   SETUP_NFT: 'SETUP_NFT',
   SETUP_ACTIVITY: 'SETUP_ACTIVITY',
 
-  // 用户管理
+  // User management
   USER_VERIFIED: 'USER_VERIFIED',
   USER_UNVERIFIED: 'USER_UNVERIFIED',
   ROLE_ASSIGNED: 'ROLE_ASSIGNED',
   ROLE_REMOVED: 'ROLE_REMOVED',
 
-  // 系统管理
+  // System management
   WEEKLY_RESET: 'WEEKLY_RESET',
   LEADERBOARD_POSTED: 'LEADERBOARD_POSTED'
 };
 
 /**
- * 格式化时间戳
+ * Format timestamp
  */
 function getTimestamp() {
   return new Date().toISOString();
 }
 
 /**
- * 写入日志文件
+ * Write to log file
  */
 function writeLog(filePath, content) {
   const logLine = `${content}\n`;
@@ -87,7 +87,7 @@ function writeLog(filePath, content) {
 }
 
 /**
- * 格式化日志条目
+ * Format log entry
  */
 function formatLogEntry(level, event, data) {
   return JSON.stringify({
@@ -98,12 +98,12 @@ function formatLogEntry(level, event, data) {
   });
 }
 
-// ==================== 安全事件日志 ====================
+// ==================== Security Event Logs ====================
 
 /**
- * 记录安全事件
- * @param {string} event - 事件类型
- * @param {object} data - 事件数据
+ * Record security event
+ * @param {string} event - Event type
+ * @param {object} data - Event data
  */
 function logSecurityEvent(event, data = {}) {
   const level = getSecurityLevel(event);
@@ -116,7 +116,7 @@ function logSecurityEvent(event, data = {}) {
 
   writeLog(SECURITY_LOG, entry);
 
-  // 如果是严重事件，同时输出到控制台
+  // If it's a critical event, also output to console
   if (level === LOG_LEVELS.CRITICAL || level === LOG_LEVELS.ERROR) {
     console.log(`🔴 [SECURITY] ${event}: ${JSON.stringify(data.details || {})}`);
   } else if (level === LOG_LEVELS.WARN) {
@@ -125,7 +125,7 @@ function logSecurityEvent(event, data = {}) {
 }
 
 /**
- * 根据事件类型获取日志级别
+ * Get log level based on event type
  */
 function getSecurityLevel(event) {
   const criticalEvents = ['SUSPICIOUS_ACTIVITY', 'DATABASE_ERROR'];
@@ -139,12 +139,12 @@ function getSecurityLevel(event) {
   return LOG_LEVELS.INFO;
 }
 
-// ==================== 管理员操作审计 ====================
+// ==================== Administrator Operation Auditing ====================
 
 /**
- * 记录管理员操作
- * @param {string} event - 审计事件类型
- * @param {object} data - 事件数据
+ * Record administrator operation
+ * @param {string} event - Audit event type
+ * @param {object} data - Event data
  */
 function logAuditEvent(event, data = {}) {
   const entry = formatLogEntry(LOG_LEVELS.INFO, event, {
@@ -160,21 +160,21 @@ function logAuditEvent(event, data = {}) {
 
   writeLog(AUDIT_LOG, entry);
 
-  // 输出到控制台
+  // Output to console
   console.log(`📋 [AUDIT] ${event} by ${data.adminTag || 'System'} in ${data.guildName || data.guildId}`);
 }
 
-// ==================== 用户行为追踪 ====================
+// ==================== User Behavior Tracking ====================
 
-// 内存中的用户行为追踪器
+// In-memory user behavior tracker
 const userBehaviorTracker = new Map();
 
 /**
- * 追踪用户行为
- * @param {string} guildId - 服务器ID
- * @param {string} userId - 用户ID
- * @param {string} action - 行为类型
- * @param {object} metadata - 元数据
+ * Track user behavior
+ * @param {string} guildId - Guild ID
+ * @param {string} userId - User ID
+ * @param {string} action - Action type
+ * @param {object} metadata - Metadata
  */
 function trackUserBehavior(guildId, userId, action, metadata = {}) {
   const key = `${guildId}:${userId}`;
@@ -195,19 +195,19 @@ function trackUserBehavior(guildId, userId, action, metadata = {}) {
   const tracker = userBehaviorTracker.get(key);
   tracker.lastSeen = now;
 
-  // 记录行为
+  // Record behavior
   tracker.actions.push({
     action,
     timestamp: now,
     ...metadata
   });
 
-  // 只保留最近100条记录
+  // Keep only the last 100 records
   if (tracker.actions.length > 100) {
     tracker.actions = tracker.actions.slice(-100);
   }
 
-  // 更新统计
+  // Update statistics
   switch (action) {
     case 'verify':
       tracker.verifyAttempts++;
@@ -220,23 +220,23 @@ function trackUserBehavior(guildId, userId, action, metadata = {}) {
       break;
   }
 
-  // 检测可疑行为
+  // Detect suspicious behavior
   detectSuspiciousBehavior(guildId, userId, tracker);
 }
 
 /**
- * 检测可疑行为
+ * Detect suspicious behavior
  */
 function detectSuspiciousBehavior(guildId, userId, tracker) {
   const now = Date.now();
   const ONE_HOUR = 60 * 60 * 1000;
   const ONE_MINUTE = 60 * 1000;
 
-  // 获取最近1小时的行为
+  // Get behavior in the last 1 hour
   const recentActions = tracker.actions.filter(a => now - a.timestamp < ONE_HOUR);
   const recentVerifyAttempts = recentActions.filter(a => a.action === 'verify').length;
 
-  // 检测：1小时内验证尝试超过20次
+  // Detection: More than 20 verification attempts in 1 hour
   if (recentVerifyAttempts > 20 && !tracker.flags.includes('excessive_verify')) {
     tracker.flags.push('excessive_verify');
     logSecurityEvent(SECURITY_EVENTS.SUSPICIOUS_ACTIVITY, {
@@ -250,7 +250,7 @@ function detectSuspiciousBehavior(guildId, userId, tracker) {
     });
   }
 
-  // 检测：1分钟内命令超过30次
+  // Detection: More than 30 commands in 1 minute
   const recentCommands = recentActions.filter(a =>
     a.action === 'command' && now - a.timestamp < ONE_MINUTE
   );
@@ -269,9 +269,9 @@ function detectSuspiciousBehavior(guildId, userId, tracker) {
 }
 
 /**
- * 获取用户行为报告
- * @param {string} guildId - 服务器ID
- * @param {string} userId - 用户ID
+ * Get user behavior report
+ * @param {string} guildId - Guild ID
+ * @param {string} userId - User ID
  */
 function getUserBehaviorReport(guildId, userId) {
   const key = `${guildId}:${userId}`;
@@ -279,10 +279,10 @@ function getUserBehaviorReport(guildId, userId) {
 }
 
 /**
- * 标记用户为可疑
- * @param {string} guildId - 服务器ID
- * @param {string} userId - 用户ID
- * @param {string} reason - 原因
+ * Flag user as suspicious
+ * @param {string} guildId - Guild ID
+ * @param {string} userId - User ID
+ * @param {string} reason - Reason
  */
 function flagUser(guildId, userId, reason) {
   const key = `${guildId}:${userId}`;
@@ -304,9 +304,9 @@ function flagUser(guildId, userId, reason) {
 }
 
 /**
- * 检查用户是否被标记
- * @param {string} guildId - 服务器ID
- * @param {string} userId - 用户ID
+ * Check if the user is flagged
+ * @param {string} guildId - Guild ID
+ * @param {string} userId - User ID
  */
 function isUserFlagged(guildId, userId) {
   const key = `${guildId}:${userId}`;
@@ -315,7 +315,7 @@ function isUserFlagged(guildId, userId) {
 }
 
 /**
- * 获取用户标记列表
+ * Get user flags list
  */
 function getUserFlags(guildId, userId) {
   const key = `${guildId}:${userId}`;
@@ -323,11 +323,11 @@ function getUserFlags(guildId, userId) {
   return tracker ? tracker.flags : [];
 }
 
-// ==================== 日志查询 ====================
+// ==================== Log Query ====================
 
 /**
- * 读取最近的安全日志
- * @param {number} lines - 行数
+ * Read recent security logs
+ * @param {number} lines - Number of lines
  */
 function getRecentSecurityLogs(lines = 50) {
   try {
@@ -344,8 +344,8 @@ function getRecentSecurityLogs(lines = 50) {
 }
 
 /**
- * 读取最近的审计日志
- * @param {number} lines - 行数
+ * Read recent audit logs
+ * @param {number} lines - Number of lines
  */
 function getRecentAuditLogs(lines = 50) {
   try {
@@ -362,10 +362,10 @@ function getRecentAuditLogs(lines = 50) {
 }
 
 /**
- * 清理旧日志（保留最近7天）
+ * Clean up old logs (keep the last 7 days)
  */
 function cleanupOldLogs() {
-  const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7天
+  const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
   const now = Date.now();
 
   [SECURITY_LOG, AUDIT_LOG, USER_ACTIVITY_LOG].forEach(logFile => {
@@ -391,7 +391,7 @@ function cleanupOldLogs() {
     }
   });
 
-  // 清理内存中的用户追踪数据
+  // Clean up user tracking data in memory
   for (const [key, tracker] of userBehaviorTracker.entries()) {
     if (now - tracker.lastSeen > MAX_AGE_MS) {
       userBehaviorTracker.delete(key);
@@ -401,29 +401,29 @@ function cleanupOldLogs() {
   console.log('🧹 Cleaned up old logs');
 }
 
-// 每天清理一次旧日志
+// Clean up old logs once a day
 setInterval(cleanupOldLogs, 24 * 60 * 60 * 1000);
 
 module.exports = {
-  // 事件类型常量
+  // Event type constants
   SECURITY_EVENTS,
   AUDIT_EVENTS,
   LOG_LEVELS,
 
-  // 安全事件日志
+  // Security event logs
   logSecurityEvent,
 
-  // 审计日志
+  // Audit logs
   logAuditEvent,
 
-  // 用户行为追踪
+  // User behavior tracking
   trackUserBehavior,
   getUserBehaviorReport,
   flagUser,
   isUserFlagged,
   getUserFlags,
 
-  // 日志查询
+  // Log query
   getRecentSecurityLogs,
   getRecentAuditLogs,
   cleanupOldLogs

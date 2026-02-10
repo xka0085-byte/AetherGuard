@@ -1,13 +1,13 @@
 /**
- * 文件名：checkNFT.js
- * 用途：NFT 验证模块（多链支持 - Ethereum, Polygon, Base）
+ * Filename: checkNFT.js
+ * Purpose: NFT verification module (multi-chain support - Ethereum, Polygon, Base)
  *
- * 测试方法：
- * 1. 获取一个已知持有 NFT 的钱包地址
- * 2. 运行 /verify 命令输入该地址
- * 3. 应该显示 NFT 数量
+ * Test Method:
+ * 1. Get a wallet address known to hold an NFT
+ * 2. Run /verify command and enter that address
+ * 3. Should show NFT count
  *
- * 支持的链：
+ * Supported Chains:
  * - Ethereum Mainnet
  * - Polygon (MATIC)
  * - Base (Coinbase L2)
@@ -17,22 +17,22 @@ const { Alchemy, Network } = require('alchemy-sdk');
 const NodeCache = require('node-cache');
 const config = require('../config');
 
-// 缓存验证结果 24 小时
+// Cache verification results for 24 hours
 const cache = new NodeCache({ stdTTL: 86400 });
 
-// Alchemy Network 映射
+// Alchemy Network mapping
 const NETWORK_MAP = {
   'ethereum': Network.ETH_MAINNET,
   'polygon': Network.MATIC_MAINNET,
   'base': Network.BASE_MAINNET,
 };
 
-// 为每个链创建 Alchemy 实例
+// Create Alchemy instance for each chain
 const alchemyInstances = {};
 
 /**
- * 获取指定链的 Alchemy 实例
- * @param {string} chain - 链名称 (ethereum, polygon, base)
+ * Get Alchemy instance for a specific chain
+ * @param {string} chain - Chain name (ethereum, polygon, base)
  * @returns {Alchemy}
  */
 function getAlchemyInstance(chain = 'ethereum') {
@@ -54,8 +54,8 @@ function getAlchemyInstance(chain = 'ethereum') {
 }
 
 /**
- * 验证以太坊钱包地址格式
- * @param {string} address - 钱包地址
+ * Validate Ethereum wallet address format
+ * @param {string} address - Wallet address
  * @returns {boolean}
  */
 function isValidAddress(address) {
@@ -63,15 +63,15 @@ function isValidAddress(address) {
 }
 
 /**
- * 检查 NFT 所有权
- * @param {string} walletAddress - 用户钱包地址
- * @param {string} contractAddress - NFT 合约地址
- * @param {number} requiredAmount - 需要的最低 NFT 数量（默认: 1）
- * @param {string} chain - 区块链网络 (ethereum, polygon, base)
+ * Check NFT ownership
+ * @param {string} walletAddress - User wallet address
+ * @param {string} contractAddress - NFT contract address
+ * @param {number} requiredAmount - Minimum NFT amount required (default: 1)
+ * @param {string} chain - Blockchain network (ethereum, polygon, base)
  * @returns {Promise<{success: boolean, balance?: number, required?: number, chain?: string, error?: string}>}
  */
 async function checkNFTOwnership(walletAddress, contractAddress, requiredAmount = 1, chain = 'ethereum') {
-  // 验证钱包地址格式
+  // Validate wallet address format
   if (!isValidAddress(walletAddress)) {
     return {
       success: false,
@@ -79,7 +79,7 @@ async function checkNFTOwnership(walletAddress, contractAddress, requiredAmount 
     };
   }
 
-  // 验证合约地址格式
+  // Validate contract address format
   if (!isValidAddress(contractAddress)) {
     return {
       success: false,
@@ -87,7 +87,7 @@ async function checkNFTOwnership(walletAddress, contractAddress, requiredAmount 
     };
   }
 
-  // 验证链是否支持
+  // Verify if chain is supported
   const normalizedChain = chain.toLowerCase();
   if (!NETWORK_MAP[normalizedChain]) {
     return {
@@ -96,11 +96,11 @@ async function checkNFTOwnership(walletAddress, contractAddress, requiredAmount 
     };
   }
 
-  // 标准化地址为小写
+  // Normalize addresses to lowercase
   const normalizedWallet = walletAddress.toLowerCase();
   const normalizedContract = contractAddress.toLowerCase();
 
-  // 先检查缓存（包含链信息）
+  // Check cache first (includes chain info)
   const cacheKey = `${normalizedChain}_${normalizedWallet}_${normalizedContract}`;
   const cached = cache.get(cacheKey);
   if (cached !== undefined) {
@@ -108,10 +108,10 @@ async function checkNFTOwnership(walletAddress, contractAddress, requiredAmount 
     return cached;
   }
 
-  // 获取对应链的 Alchemy 实例
+  // Get Alchemy instance for the corresponding chain
   const alchemy = getAlchemyInstance(normalizedChain);
 
-  // 尝试 API 调用并重试
+  // Attempt API call and retry
   let lastError;
   const maxRetries = config.alchemy.retryCount;
   const timeout = config.alchemy.timeout;
@@ -120,19 +120,19 @@ async function checkNFTOwnership(walletAddress, contractAddress, requiredAmount 
     try {
       console.log(`📊 Checking NFT ownership on ${normalizedChain} (attempt ${attempt}/${maxRetries})...`);
 
-      // 创建超时 Promise
+      // Create timeout Promise
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('TIMEOUT')), timeout)
       );
 
-      // 调用 Alchemy API
+      // Call Alchemy API
       const nftsPromise = alchemy.nft.getNftsForOwner(normalizedWallet, {
         contractAddresses: [normalizedContract],
       });
 
       const nfts = await Promise.race([nftsPromise, timeoutPromise]);
 
-      // 获取余额
+      // Get balance
       const balance = nfts.totalCount || 0;
 
       const result = {
@@ -142,7 +142,7 @@ async function checkNFTOwnership(walletAddress, contractAddress, requiredAmount 
         chain: normalizedChain,
       };
 
-      // 缓存成功结果
+      // Cache successful result
       cache.set(cacheKey, result);
 
       console.log(`✅ NFT check complete on ${normalizedChain}: ${balance}/${requiredAmount} NFTs found`);
@@ -153,7 +153,7 @@ async function checkNFTOwnership(walletAddress, contractAddress, requiredAmount 
       console.log(`❌ Attempt ${attempt} failed: ${error.message}`);
 
       if (attempt < maxRetries) {
-        // 指数退避：2^attempt 秒
+        // Exponential backoff: 2^attempt seconds
         const backoffMs = Math.pow(2, attempt) * 1000;
         console.log(`⏳ Waiting ${backoffMs / 1000}s before retry...`);
         await new Promise((r) => setTimeout(r, backoffMs));
@@ -161,7 +161,7 @@ async function checkNFTOwnership(walletAddress, contractAddress, requiredAmount 
     }
   }
 
-  // 所有重试都失败
+  // All retries failed
   console.error(`❌ All ${maxRetries} attempts failed for ${normalizedWallet.slice(0, 10)}...`);
 
   return {
@@ -171,10 +171,10 @@ async function checkNFTOwnership(walletAddress, contractAddress, requiredAmount 
 }
 
 /**
- * 获取钱包拥有的所有指定合约的 NFT
- * @param {string} walletAddress - 用户钱包地址
- * @param {string} contractAddress - NFT 合约地址
- * @param {string} chain - 区块链网络 (ethereum, polygon, base)
+ * Get all NFTs for a specific contract owned by a wallet
+ * @param {string} walletAddress - User wallet address
+ * @param {string} contractAddress - NFT contract address
+ * @param {string} chain - Blockchain network (ethereum, polygon, base)
  * @returns {Promise<{success: boolean, nfts?: Array, error?: string}>}
  */
 async function getNFTsForOwner(walletAddress, contractAddress, chain = 'ethereum') {
@@ -215,10 +215,10 @@ async function getNFTsForOwner(walletAddress, contractAddress, chain = 'ethereum
 }
 
 /**
- * 清除特定钱包/合约的缓存
- * @param {string} walletAddress - 用户钱包地址
- * @param {string} contractAddress - NFT 合约地址
- * @param {string} chain - 区块链网络 (ethereum, polygon, base)
+ * Clear cache for a specific wallet/contract
+ * @param {string} walletAddress - User wallet address
+ * @param {string} contractAddress - NFT contract address
+ * @param {string} chain - Blockchain network (ethereum, polygon, base)
  */
 function clearCache(walletAddress, contractAddress, chain = 'ethereum') {
   const cacheKey = `${chain.toLowerCase()}_${walletAddress.toLowerCase()}_${contractAddress.toLowerCase()}`;
@@ -226,21 +226,21 @@ function clearCache(walletAddress, contractAddress, chain = 'ethereum') {
 }
 
 /**
- * 清除所有缓存
+ * Clear all cache
  */
 function clearAllCache() {
   cache.flushAll();
 }
 
 /**
- * 获取缓存统计信息
+ * Get cache statistical information
  */
 function getCacheStats() {
   return cache.getStats();
 }
 
 /**
- * 获取支持的链列表
+ * Get list of supported chains
  * @returns {string[]}
  */
 function getSupportedChains() {

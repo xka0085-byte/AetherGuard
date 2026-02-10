@@ -1,14 +1,14 @@
 /**
- * 文件名：payment.js
- * 用途：链上支付验证模块 — 通过 tx hash 验证 ERC-20 Transfer 事件
+ * Filename: payment.js
+ * Purpose: On-chain payment verification module — verify ERC-20 Transfer event via tx hash
  *
- * 支持：多链（Ethereum, Polygon, Base）× 多币种（USDC, USDT 等）
+ * Support: Multi-chain (Ethereum, Polygon, Base) x Multi-currency (USDC, USDT, etc.)
  */
 
 const { Alchemy, Network } = require('alchemy-sdk');
 const config = require('../config');
 
-// ERC-20 Transfer(address,address,uint256) 事件签名
+// ERC-20 Transfer(address,address,uint256) event signature
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
 const NETWORK_MAP = {
@@ -33,7 +33,7 @@ function getAlchemyInstance(chain) {
 }
 
 /**
- * 获取指定链上接受的代币列表
+ * Get the list of accepted tokens on a specific chain
  * @param {string} chain
  * @returns {Array<{symbol:string, contract:string, decimals:number}>}
  */
@@ -44,7 +44,7 @@ function getAcceptedTokens(chain) {
 }
 
 /**
- * 获取所有支持支付的链
+ * Get all chains that support payment
  * @returns {string[]}
  */
 function getSupportedPayChains() {
@@ -55,9 +55,9 @@ function getSupportedPayChains() {
 }
 
 /**
- * 验证 ERC-20 转账交易（多链多币种）
- * @param {string} txHash - 交易哈希
- * @param {string} chain - 链名称 (ethereum, polygon, base)
+ * Verify ERC-20 transfer transaction (multi-chain, multi-currency)
+ * @param {string} txHash - Transaction hash
+ * @param {string} chain - Chain name (ethereum, polygon, base)
  * @returns {Promise<{ok:boolean, error?:string, from?:string, to?:string, amount?:string, token?:string, symbol?:string, chain?:string}>}
  */
 async function verifyPayment(txHash, chain) {
@@ -71,7 +71,7 @@ async function verifyPayment(txHash, chain) {
   const tokens = getAcceptedTokens(chain);
   if (tokens.length === 0) return { ok: false, error: 'NO_TOKENS_ON_CHAIN' };
 
-  // 构建 contract → token 的快速查找表
+  // Build contract -> token fast lookup table
   const tokenMap = {};
   for (const t of tokens) {
     tokenMap[t.contract.toLowerCase()] = t;
@@ -79,7 +79,7 @@ async function verifyPayment(txHash, chain) {
 
   const alchemy = getAlchemyInstance(chain);
 
-  // 1. 获取交易 receipt
+  // 1. Get transaction receipt
   let receipt;
   try {
     receipt = await alchemy.core.getTransactionReceipt(txHash);
@@ -91,7 +91,7 @@ async function verifyPayment(txHash, chain) {
   if (!receipt) return { ok: false, error: 'TX_NOT_FOUND' };
   if (receipt.status !== 1) return { ok: false, error: 'TX_REVERTED' };
 
-  // 2. 检查确认数
+  // 2. Check number of confirmations
   if (pay.minConfirmations > 1) {
     try {
       const currentBlock = await alchemy.core.getBlockNumber();
@@ -99,10 +99,10 @@ async function verifyPayment(txHash, chain) {
       if (confirmations < pay.minConfirmations) {
         return { ok: false, error: 'INSUFFICIENT_CONFIRMATIONS' };
       }
-    } catch (_) { /* receipt 存在即至少 1 确认 */ }
+    } catch (_) { /* receipt existence means at least 1 confirmation */ }
   }
 
-  // 3. 在 logs 中匹配任意接受代币的 Transfer → receiver
+  // 3. Match Transfer -> receiver for any accepted token in logs
   const targetReceiver = pay.receiver;
 
   for (const log of receipt.logs) {
@@ -110,13 +110,13 @@ async function verifyPayment(txHash, chain) {
 
     const contractAddr = log.address.toLowerCase();
     const tokenInfo = tokenMap[contractAddr];
-    if (!tokenInfo) continue; // 不是我们接受的代币
+    if (!tokenInfo) continue; // Not a token we accept
 
-    // 解析 to
+    // Parse "to"
     const to = '0x' + log.topics[2].slice(26).toLowerCase();
     if (to !== targetReceiver) continue;
 
-    // 解析 from & amount
+    // Parse "from" & "amount"
     const from = '0x' + log.topics[1].slice(26).toLowerCase();
     const amountRaw = BigInt(log.data);
     const required = BigInt(pay.price) * BigInt(10 ** tokenInfo.decimals);

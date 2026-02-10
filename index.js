@@ -18,7 +18,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const cron = require('node-cron');
 
-// 导入模块
+// Import modules
 const db = require('./database/db');
 const { checkNFTOwnership } = require('./modules/checkNFT');
 const activityTrackerModule = require('./modules/activityTracker');
@@ -28,7 +28,7 @@ const securityLogger = require('./utils/securityLogger');
 const { verifyPayment, getAcceptedTokens, getSupportedPayChains } = require('./modules/payment');
 
 // ============================================
-// 全局错误处理 (防止进程崩溃)
+// Global error handling (prevent process crash)
 // ============================================
 process.on('unhandledRejection', (reason, promise) => {
     console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
@@ -36,11 +36,11 @@ process.on('unhandledRejection', (reason, promise) => {
 
 process.on('uncaughtException', (error) => {
     console.error('💥 Uncaught Exception:', error);
-    // 保持进程存活，或依赖 PM2 重启
+    // Keep the process alive, or rely on PM2 to restart
 });
 
 // ============================================
-// 错误消息定义（中文友好）
+// Error message definitions (user-friendly)
 // ============================================
 const ERROR_MESSAGES = {
     INVALID_ADDRESS: '❌ Invalid wallet address\nPlease enter a valid Ethereum address (42 characters starting with 0x)',
@@ -55,24 +55,24 @@ const ERROR_MESSAGES = {
     UNKNOWN_ERROR: '❓ Unknown error\nAn unexpected error occurred, please try again later'
 };
 
-// 免费版验证人数上限（测试时可临时改为 2）
+// Limit for free version verification (can be changed to 2 for testing)
 const FREE_VERIFY_LIMIT = 50;
 
 // ============================================
-// 命令冷却系统
+// Command cooldown system
 // ============================================
 const cooldowns = new Map();
-const COOLDOWN_TIME = 5000; // 5秒冷却
+const COOLDOWN_TIME = 5000; // 5 seconds cooldown
 
 // ============================================
-// 用户级速率限制（改进版）
+// User-level rate limiting (improved version)
 // ============================================
 const userRateLimits = new Map();
 
 /**
- * 检查用户速率限制
- * @param {string} guildId 服务器ID
- * @param {string} userId 用户ID
+ * Check user rate limit
+ * @param {string} guildId Guild ID
+ * @param {string} userId User ID
  * @returns {{allowed: boolean, reason: string}}
  */
 function checkUserRateLimit(guildId, userId) {
@@ -89,14 +89,14 @@ function checkUserRateLimit(guildId, userId) {
     const validTimestamps = timestamps.filter(t => now - t < ONE_HOUR);
     userRateLimits.set(key, validTimestamps);
     
-    // 1分钟内最多2次
+    // Max 2 times within 1 minute
     const lastMinute = validTimestamps.filter(t => now - t < ONE_MINUTE);
     if (lastMinute.length >= 2) {
         const waitSeconds = Math.ceil((lastMinute[0] + ONE_MINUTE - now) / 1000);
         return { allowed: false, reason: `Max 2 verifications per minute. Please wait ${waitSeconds} seconds` };
     }
     
-    // 1小时内最多10次
+    // Max 10 times within 1 hour
     if (validTimestamps.length >= 10) {
         const waitMinutes = Math.ceil((validTimestamps[0] + ONE_HOUR - now) / 60000);
         return { allowed: false, reason: `Max 10 verifications per hour. Please wait ${waitMinutes} minutes` };
@@ -106,7 +106,7 @@ function checkUserRateLimit(guildId, userId) {
     return { allowed: true, reason: '' };
 }
 
-// 每10分钟清理过期记录
+// Clean up expired records every 10 minutes
 setInterval(() => {
     const now = Date.now();
     const ONE_HOUR = 60 * 60 * 1000;
@@ -121,7 +121,7 @@ setInterval(() => {
 }, 10 * 60 * 1000);
 
 // ============================================
-// /pay 独立速率限制（防滥用/防刷API）
+// /pay independent rate limit (prevent abuse/API spamming)
 // ============================================
 const payRateLimits = new Map(); // key: `${guildId}:${userId}` -> number[] timestamps(ms)
 
@@ -134,13 +134,13 @@ function checkPayRateLimit(guildId, userId) {
   const arr = payRateLimits.get(key) || [];
   const recent = arr.filter(t => now - t < ONE_HOUR);
 
-  // 1 小时最多 3 次
+  // Max 3 times per hour
   if (recent.length >= 3) {
     const waitMin = Math.ceil((recent[0] + ONE_HOUR - now) / 60000);
     return { allowed: false, reason: `Max 3 payment verifications per hour. Please wait ${waitMin} minute(s).` };
   }
 
-  // 5 分钟内最多 1 次
+  // Max 1 time per 5 minutes
   const last5min = recent.filter(t => now - t < FIVE_MIN);
   if (last5min.length >= 1) {
     const waitSec = Math.ceil((last5min[0] + FIVE_MIN - now) / 1000);
@@ -152,7 +152,7 @@ function checkPayRateLimit(guildId, userId) {
   return { allowed: true, reason: '' };
 }
 
-// 定期清理过期记录（每 10 分钟）
+// Regularly clean up expired records (every 10 minutes)
 setInterval(() => {
   const now = Date.now();
   const ONE_HOUR = 60 * 60 * 1000;
@@ -165,9 +165,9 @@ setInterval(() => {
 
 
 /**
- * 检查用户是否在冷却中
- * @param {string} userId - 用户ID
- * @returns {number|false} 剩余冷却时间（秒）或false
+ * Check if the user is in cooldown
+ * @param {string} userId - User ID
+ * @returns {number|false} Remaining cooldown time (seconds) or false
  */
 function checkCooldown(userId) {
     const now = Date.now();
@@ -183,7 +183,7 @@ function checkCooldown(userId) {
     return false;
 }
 
-// 定期清理过期的冷却记录（每5分钟）
+// Regularly clean up expired cooldown records (every 5 minutes)
 setInterval(() => {
     const now = Date.now();
     for (const [userId, timestamp] of cooldowns.entries()) {
@@ -194,7 +194,7 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 // ============================================
-// 订阅与权限检查助手
+// Subscription and permission check helpers
 // ============================================
 async function canUsePro(guildId) {
     const sub = config.subscription || {};
@@ -209,7 +209,7 @@ function isOwner(userId) {
 }
 
 // ============================================
-// Discord客户端初始化
+// Discord client initialization
 // ============================================
 const client = new Client({
     intents: [
@@ -223,7 +223,7 @@ const client = new Client({
 });
 
 // ============================================
-// 斜杠命令定义（8个命令）
+// Slash command definitions (8 commands)
 // ============================================
 const commands = [
     // /setup - Configure NFT verification (only NFT-related options)
@@ -287,7 +287,7 @@ const commands = [
                 .setRequired(false)
                 .setMinValue(0)
                 .setMaxValue(100))
-        // 每日积分上限选项
+        // Daily point cap options
         .addIntegerOption(option =>
             option.setName('daily_message_cap')
                 .setDescription('Daily message point cap (default: 100)')
@@ -312,7 +312,7 @@ const commands = [
                 .setRequired(false)
                 .setMinValue(1)
                 .setMaxValue(1440))
-        // NFT持有量加成选项
+        // NFT holding bonus options
         .addBooleanOption(option =>
             option.setName('nft_bonus')
                 .setDescription('Enable NFT holding bonus (more NFTs = higher multiplier)')
@@ -434,7 +434,7 @@ const commands = [
 ];
 
 // ============================================
-// 注册斜杠命令
+// Register slash commands
 // ============================================
 async function registerCommands() {
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -454,11 +454,11 @@ async function registerCommands() {
 }
 
 // ============================================
-// 命令处理函数
+// Command handling functions
 // ============================================
 
 /**
- * 处理 /setup 命令 (仅NFT验证相关)
+ * Handle /setup command (NFT verification related only)
  */
 async function handleSetup(interaction) {
     const guildId = interaction.guildId;
@@ -467,7 +467,7 @@ async function handleSetup(interaction) {
     const role = interaction.options.getRole('role');
     const amount = interaction.options.getInteger('amount') || 1;
 
-    // 验证合约地址格式
+    // Validate contract address format
     if (!/^0x[a-fA-F0-9]{40}$/.test(contract)) {
         return interaction.reply({
             content: ERROR_MESSAGES.INVALID_ADDRESS,
@@ -475,10 +475,10 @@ async function handleSetup(interaction) {
         });
     }
 
-    // 立即响应，防止3秒超时
+    // Immediate response to prevent 3-second timeout
     await interaction.deferReply({ ephemeral: true });
 
-    // 获取链的显示名称
+    // Get display name of the chain
     const chainNames = {
         ethereum: '⟠ Ethereum',
         polygon: '🟣 Polygon',
@@ -487,10 +487,10 @@ async function handleSetup(interaction) {
     const chainDisplay = chainNames[chain] || chain;
 
     try {
-        // 获取旧配置（用于审计日志）
+        // Get old configuration (for audit logs)
         const oldConfig = await db.getCommunity(guildId);
 
-        // 保存配置到数据库
+        // Save configuration to database
         await db.upsertCommunity({
             guildId,
             nftContractAddress: contract,
@@ -499,7 +499,7 @@ async function handleSetup(interaction) {
             verifiedRoleId: role.id
         });
 
-        // 记录管理员操作审计日志
+        // Log administrator action audit log
         securityLogger.logAuditEvent(securityLogger.AUDIT_EVENTS.SETUP_NFT, {
             guildId,
             guildName: interaction.guild.name,
@@ -542,7 +542,7 @@ async function handleSetup(interaction) {
 }
 
 /**
- * 处理 /activity-setup 命令 (管理员配置活跃度追踪)
+ * Handle /activity-setup command (Administrator configures activity tracking)
  */
 async function handleActivitySetup(interaction) {
     const guildId = interaction.guildId;
@@ -551,23 +551,23 @@ async function handleActivitySetup(interaction) {
     const replyScore = interaction.options.getNumber('reply_score') ?? 2.0;
     const reactionScore = interaction.options.getNumber('reaction_score') ?? 0.5;
     const voiceScore = interaction.options.getNumber('voice_score') ?? 0.1;
-    // 每日积分上限
+    // Daily point caps
     const dailyMessageCap = interaction.options.getInteger('daily_message_cap') ?? 100;
     const dailyReplyCap = interaction.options.getInteger('daily_reply_cap') ?? 50;
     const dailyReactionCap = interaction.options.getInteger('daily_reaction_cap') ?? 50;
     const dailyVoiceCap = interaction.options.getInteger('daily_voice_cap') ?? 120;
-    // NFT持有量加成
+    // NFT holding bonus
     const nftBonusEnabled = interaction.options.getBoolean('nft_bonus') ?? false;
     const leaderboardChannel = interaction.options.getChannel('leaderboard_channel');
 
-    // 立即响应，防止3秒超时
+    // Immediate response to prevent 3-second timeout
     await interaction.deferReply({ ephemeral: true });
 
     try {
-        // 获取旧配置（用于审计日志）
+        // Get old configuration (for audit logs)
         const oldSettings = await db.getActivitySettings(guildId);
 
-        // 保存活跃度设置
+        // Save activity settings
         await db.upsertActivitySettings({
             guildId,
             enabled: enabled ? 1 : 0,
@@ -583,7 +583,7 @@ async function handleActivitySetup(interaction) {
             leaderboardChannelId: leaderboardChannel?.id || null
         });
 
-        // 记录管理员操作审计日志
+        // Log administrator action audit log
         securityLogger.logAuditEvent(securityLogger.AUDIT_EVENTS.SETUP_ACTIVITY, {
             guildId,
             guildName: interaction.guild.name,
@@ -643,7 +643,7 @@ async function handleActivitySetup(interaction) {
 }
 
 /**
- * 处理 /activity-overview 命令 (管理员查看所有成员活跃度)
+ * Handle /activity-overview command (Administrator views all members' activity)
  */
 async function handleActivityOverview(interaction) {
     const guildId = interaction.guildId;
@@ -653,7 +653,7 @@ async function handleActivityOverview(interaction) {
     const page = interaction.options.getInteger('page') || 1;
     const pageSize = 15;
 
-    // 验证日期格式
+    // Validate date format
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (startDate && !dateRegex.test(startDate)) {
         return interaction.reply({
@@ -671,7 +671,7 @@ async function handleActivityOverview(interaction) {
     await interaction.deferReply({ ephemeral: true });
 
     try {
-        // 获取活跃度设置
+        // Get activity settings
         const settings = await db.getActivitySettings(guildId);
         if (!settings || !settings.enabled) {
             return interaction.editReply({
@@ -679,10 +679,10 @@ async function handleActivityOverview(interaction) {
             });
         }
 
-        // 获取统计摘要
+        // Get statistical summary
         const summary = await db.getActivitySummary(guildId);
 
-        // 获取活跃度数据
+        // Get activity data
         const activityData = await db.getAllActivityData(guildId, {
             limit: pageSize,
             offset: (page - 1) * pageSize,
@@ -698,7 +698,7 @@ async function handleActivityOverview(interaction) {
             });
         }
 
-        // 构建排行榜描述
+        // Build leaderboard description
         let description = '';
         const sortLabels = {
             total_score: 'Total Score',
@@ -743,20 +743,20 @@ async function handleActivityOverview(interaction) {
 }
 
 /**
- * 处理 /verify 命令
+ * Handle /verify command
  */
 async function handleVerify(interaction) {
     const guildId = interaction.guildId;
     const userId = interaction.user.id;
     const wallet = interaction.options.getString('wallet').trim();
 
-    // 立即响应，防止3秒超时
+    // Immediate response to prevent 3-second timeout
     await interaction.deferReply({ ephemeral: true });
 
-    // ===== 速率限制检查 =====
+    // ===== Rate limit check =====
     const rateLimitCheck = checkUserRateLimit(guildId, userId);
     if (!rateLimitCheck.allowed) {
-        // 记录速率限制事件
+        // Log rate limit event
         securityLogger.logSecurityEvent(securityLogger.SECURITY_EVENTS.RATE_LIMIT_VERIFY, {
             guildId,
             userId,
@@ -769,12 +769,12 @@ async function handleVerify(interaction) {
             content: `⏱️ Verification Rate Limit\n${rateLimitCheck.reason}\n\nThis is to prevent abuse and protect API quota.`
         });
     }
-    // ===== 速率限制检查结束 =====
+    // ===== Rate limit check end =====
 
-    // 追踪用户验证行为
+    // Track user verification behavior
     securityLogger.trackUserBehavior(guildId, userId, 'verify', { wallet: wallet.slice(0, 10) + '...' });
 
-    // 获取社区配置
+    // Get community configuration
     const community = await db.getCommunity(guildId);
     if (!community) {
         return interaction.editReply({
@@ -782,9 +782,9 @@ async function handleVerify(interaction) {
         });
     }
 
-    // 验证钱包地址格式
+    // Validate wallet address format
     if (!/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
-        // 记录无效地址尝试
+        // Log invalid address attempt
         securityLogger.logSecurityEvent(securityLogger.SECURITY_EVENTS.VERIFY_INVALID_ADDRESS, {
             guildId,
             userId,
@@ -797,7 +797,7 @@ async function handleVerify(interaction) {
     }
 
     try {
-        // 获取链的显示名称
+        // Get display name of the chain
         const chainNames = {
             ethereum: '⟠ Ethereum',
             polygon: '🟣 Polygon',
@@ -806,7 +806,7 @@ async function handleVerify(interaction) {
         const chain = community.chain || 'ethereum';
         const chainDisplay = chainNames[chain] || chain;
 
-        // 检查NFT持有（传入链参数）
+        // Check NFT ownership (pass in chain parameter)
         const nftResult = await checkNFTOwnership(
             wallet,
             community.nft_contract_address,
@@ -815,7 +815,7 @@ async function handleVerify(interaction) {
         );
 
         if (!nftResult.success) {
-            // 验证失败
+            // Verification failed
             let errorMessage = ERROR_MESSAGES.NFT_NOT_FOUND;
 
             if (nftResult.balance > 0) {
@@ -824,7 +824,7 @@ async function handleVerify(interaction) {
                     .replace('{required}', community.required_amount);
             }
 
-            // 记录验证失败事件
+            // Log verification failure event
             securityLogger.logSecurityEvent(securityLogger.SECURITY_EVENTS.VERIFY_FAILED, {
                 guildId,
                 userId,
@@ -852,7 +852,7 @@ async function handleVerify(interaction) {
             return interaction.editReply({ embeds: [failEmbed] });
         }
 
-        // 钱包地址唯一性检查（防止多用户共享同一钱包绕过NFT门控）
+        // Wallet address uniqueness check (prevent multiple users sharing the same wallet to bypass NFT gate)
         const walletUsedByOther = await db.isWalletUsedByOther(guildId, userId, wallet);
         if (walletUsedByOther) {
             return interaction.editReply({
@@ -860,7 +860,7 @@ async function handleVerify(interaction) {
             });
         }
 
-        // 免费版验证人数限制检查
+        // Free version verification limit check
         const isPro = await canUsePro(guildId);
         if (!isPro) {
             const existingUser = await db.getVerifiedUser(guildId, userId);
@@ -874,7 +874,7 @@ async function handleVerify(interaction) {
             }
         }
 
-        // 验证成功，保存到数据库
+        // Verification successful, save to database
         await db.upsertVerifiedUser({
             guildId,
             userId,
@@ -882,13 +882,13 @@ async function handleVerify(interaction) {
             nftBalance: nftResult.balance
         });
 
-        // 分配角色
+        // Assign role
         const member = await interaction.guild.members.fetch(userId);
         if (community.verified_role_id) {
             await member.roles.add(community.verified_role_id);
         }
 
-        // 记录验证成功事件
+        // Log verification success event
         securityLogger.logSecurityEvent(securityLogger.SECURITY_EVENTS.VERIFY_SUCCESS, {
             guildId,
             userId,
@@ -942,13 +942,13 @@ async function handleVerify(interaction) {
 }
 
 /**
- * 处理 /my-activity 命令
+ * Handle /my-activity command
  */
 async function handleMyActivity(interaction) {
     const guildId = interaction.guildId;
     const userId = interaction.user.id;
 
-    // 检查是否启用活跃度追踪
+    // Check if activity tracking is enabled
     const settings = await db.getActivitySettings(guildId);
     if (!settings || !settings.enabled) {
         return interaction.reply({
@@ -985,11 +985,11 @@ async function handleMyActivity(interaction) {
 }
 
 /**
- * 处理 /leaderboard 命令
+ * Handle /leaderboard command
  */
 async function handleLeaderboard(interaction) {
     const guildId = interaction.guildId;
-    const userChoice = interaction.options.getString('type'); // null = 没选
+    const userChoice = interaction.options.getString('type'); // null = not selected
 
     // Check if activity tracking is enabled
     const settings = await db.getActivitySettings(guildId);
@@ -1000,7 +1000,7 @@ async function handleLeaderboard(interaction) {
         });
     }
 
-    // 免费版限制：仅 Weekly，Top 10；Pro：允许 All Time，Top 50
+    // Free version limits: Weekly only, Top 10; Pro: Allows All Time, Top 50
     const isPro = await canUsePro(guildId);
     let limit, type;
     if (!isPro) {
@@ -1047,7 +1047,7 @@ async function handleLeaderboard(interaction) {
 }
 
 /**
- * 处理 /subscribe 命令 — 显示支付信息（多链多币种）
+ * Handle /subscribe command — Display payment information (multi-chain, multi-currency)
  */
 async function handleSubscribe(interaction) {
     const pay = config.payments;
@@ -1060,7 +1060,7 @@ async function handleSubscribe(interaction) {
         return interaction.reply({ content: '⚙️ No accepted tokens configured.', ephemeral: true });
     }
 
-    // 按链分组显示接受的代币
+    // Group accepted tokens by chain for display
     const tokenFields = chains.map(chain => {
         const info = config.networks[chain] || { displayName: chain, icon: '🔗' };
         const tokens = getAcceptedTokens(chain);
@@ -1113,7 +1113,7 @@ async function handleSubscribe(interaction) {
 }
 
 /**
- * 处理 /pay 命令 — 验证交易并赋予角色（多链多币种）
+ * Handle /pay command — Verify transaction and grant role (multi-chain, multi-currency)
  */
 async function handlePay(interaction) {
     const pay = config.payments;
@@ -1124,7 +1124,7 @@ async function handlePay(interaction) {
     const chain = interaction.options.getString('chain');
     const txHash = interaction.options.getString('tx').trim();
 
-    // 先做 /pay 限流
+    // Perform /pay rate limiting first
     {
       const rl = checkPayRateLimit(interaction.guildId, interaction.user.id);
       if (!rl.allowed) {
@@ -1135,7 +1135,7 @@ async function handlePay(interaction) {
       }
     }
 
-    // 要求用户先绑定钱包（/verify），并用该钱包付款
+    // Require user to bind wallet first (/verify), and pay with that wallet
     const verified = await db.getVerifiedUser(interaction.guildId, interaction.user.id);
     if (!verified || !verified.wallet_address) {
       return interaction.reply({
@@ -1144,12 +1144,12 @@ async function handlePay(interaction) {
       });
     }
 
-    // 校验 tx hash 格式
+    // Validate tx hash format
     if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
         return interaction.reply({ content: '❌ Invalid transaction hash. It should be 66 characters starting with 0x.', ephemeral: true });
     }
 
-    // 检查是否已提交过
+    // Check if it has been submitted before
     const existing = await db.getPaymentByTx(txHash);
     if (existing) {
         return interaction.reply({ content: '⚠️ This transaction has already been submitted.', ephemeral: true });
@@ -1157,7 +1157,7 @@ async function handlePay(interaction) {
 
     await interaction.deferReply({ ephemeral: true });
 
-    // 链上验证（传入 chain）
+    // On-chain verification (pass in chain)
     const result = await verifyPayment(txHash, chain);
 
     if (!result.ok) {
@@ -1176,7 +1176,7 @@ async function handlePay(interaction) {
         return interaction.editReply({ content: `❌ ${msgs[result.error] || 'Verification failed.'}` });
     }
 
-    // 记录到数据库（防止竞态条件：如果返回 false 说明已被其他请求抢先记录）
+    // Record to database (prevent race conditions: if returns false, it means another request already recorded it)
     const recorded = await db.recordPayment({
         guildId: interaction.guildId,
         userId: interaction.user.id,
@@ -1193,7 +1193,7 @@ async function handlePay(interaction) {
         return interaction.editReply({ content: '⚠️ This transaction has already been submitted.' });
     }
 
-    // 激活或续订服务器级订阅
+    // Activate or renew server-level subscription
     const subCfg = config.subscription || {};
     const durationDays = subCfg.durationDays || 30;
     const { endAt } = await db.createOrExtendSubscription({
@@ -1212,7 +1212,7 @@ async function handlePay(interaction) {
 }
 
 /**
- * 处理 /help 命令
+ * Handle /help command
  */
 async function handleHelp(interaction) {
     const embed = new EmbedBuilder()
@@ -1277,7 +1277,7 @@ async function handleHelp(interaction) {
 }
 
 /**
- * 处理 /feedback 命令
+ * Handle /feedback command
  */
 async function handleFeedback(interaction) {
     const feedbackType = interaction.options.getString('type');
@@ -1311,10 +1311,10 @@ async function handleFeedback(interaction) {
         };
 
         const typeColors = {
-            bug: 0xff0000,      // 红色
-            feature: 0x00ff00,  // 绿色
-            question: 0x0099ff, // 蓝色
-            other: 0x808080     // 灰色
+            bug: 0xff0000,      // Red
+            feature: 0x00ff00,  // Green
+            question: 0x0099ff, // Blue
+            other: 0x808080     // Gray
         };
 
         // Build feedback embed
@@ -1349,11 +1349,11 @@ async function handleFeedback(interaction) {
 }
 
 // ============================================
-// 事件处理
+// Event Handling
 // ============================================
 
 /**
- * 处理 /bot-stats 命令（仅机器人拥有者）
+ * Handle /bot-stats command (Bot owner only)
  */
 async function handleBotStats(interaction) {
     if (!isOwner(interaction.user.id)) {
@@ -1377,29 +1377,29 @@ async function handleBotStats(interaction) {
 }
 
 // ============================================
-// 事件处理
+// Event Handling
 // ============================================
 
-// 机器人就绪事件
+// Bot ready event
 client.once('ready', async () => {
     console.log(`✅ Bot logged in: ${client.user.tag}`);
 
-    // 初始化数据库
+    // Initialize database
     await db.initDatabase();
 
-    // 注册命令
+    // Register commands
     await registerCommands();
 
-    // 初始化活跃度追踪器
+    // Initialize activity tracker
     activityTrackerModule.initActivityTracker();
 
-    // 初始化排行榜管理器
+    // Initialize leaderboard manager
     leaderboardModule.initLeaderboard(client);
 
-    // 设置定时任务
+    // Setup scheduled tasks
     setupCronJobs();
 
-    // 同步已加入的服务器到数据库
+    // Sync joined guilds to database
     try {
         for (const [id, guild] of client.guilds.cache) {
             await db.addGuildIfNotExists(id, guild.name);
@@ -1409,7 +1409,7 @@ client.once('ready', async () => {
         console.error('Failed to sync guilds:', e);
     }
 
-    // 记录机器人启动事件
+    // Log bot start event
     securityLogger.logSecurityEvent(securityLogger.SECURITY_EVENTS.BOT_STARTED, {
         details: {
             botTag: client.user.tag,
@@ -1421,20 +1421,20 @@ client.once('ready', async () => {
     console.log('✅ All modules initialized');
 });
 
-// 新成员加入事件（发送验证提示）
+// New member join event (send verification prompt)
 client.on('guildMemberAdd', async (member) => {
     try {
-        // 检查是否配置了NFT验证
+        // Check if NFT verification is configured
         const community = await db.getCommunity(member.guild.id);
         if (!community || !community.nft_contract_address) {
-            return; // 未配置NFT验证，不发送提示
+            return; // NFT verification not configured, don't send prompt
         }
 
-        // 验证角色是否存在
+        // Verify if role exists
         const verifiedRole = member.guild.roles.cache.get(community.verified_role_id);
-        const roleDisplay = verifiedRole ? `<@&${community.verified_role_id}>` : '`角色已删除，请联系管理员`';
+        const roleDisplay = verifiedRole ? `<@&${community.verified_role_id}>` : '`Role deleted, please contact admin`';
 
-        // 构建欢迎消息
+        // Build welcome message
         const description = `Welcome <@${member.user.id}>!\n\n` +
             `This server requires NFT verification to gain the verified role.\n\n` +
             `**To verify:** Use the \`/verify\` command with your wallet address.\n\n` +
@@ -1450,12 +1450,12 @@ client.on('guildMemberAdd', async (member) => {
             .setFooter({ text: 'Use /verify to get verified role' })
             .setTimestamp();
 
-        // 发送私信给新成员
+        // Send DM to new member
         try {
             await member.send({ embeds: [embed] });
             console.log(`✅ Sent verification reminder to ${member.user.tag}`);
         } catch (dmError) {
-            // 如果无法发送私信，尝试在系统频道发送
+            // If DM cannot be sent, try sending in the system channel
             console.log(`⚠️ Could not DM ${member.user.tag}, trying fallback channel`);
 
             const fallbackChannel = member.guild.systemChannel;
@@ -1486,19 +1486,19 @@ client.on('guildDelete', async (guild) => {
     }
 });
 
-// 交互事件（斜杠命令）
+// Interaction event (slash commands)
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
-    // 追踪用户命令行为
+    // Track user command behavior
     securityLogger.trackUserBehavior(interaction.guildId, interaction.user.id, 'command', {
         command: interaction.commandName
     });
 
-    // 检查冷却
+    // Check cooldown
     const cooldownRemaining = checkCooldown(interaction.user.id);
     if (cooldownRemaining) {
-        // 记录命令冷却触发
+        // Log command cooldown trigger
         securityLogger.logSecurityEvent(securityLogger.SECURITY_EVENTS.RATE_LIMIT_COMMAND, {
             guildId: interaction.guildId,
             userId: interaction.user.id,
@@ -1587,46 +1587,46 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// 消息事件（活跃度追踪）
+// Message event (activity tracking)
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     if (!message.guild) return;
 
-    // 使用模块函数处理消息
+    // Use module function to handle message
     await activityTrackerModule.handleMessage(message);
 });
 
-// 反应事件（活跃度追踪）
+// Reaction event (activity tracking)
 client.on('messageReactionAdd', async (reaction, user) => {
     if (user.bot) return;
     if (!reaction.message.guild) return;
 
-    // 使用模块函数处理反应
+    // Use module function to handle reaction
     await activityTrackerModule.handleReactionAdd(reaction, user);
 });
 
-// 语音状态更新事件
+// Voice state update event
 client.on('voiceStateUpdate', async (oldState, newState) => {
     await activityTrackerModule.handleVoiceStateUpdate(oldState, newState);
 });
 
 // ============================================
-// 定时任务
+// Scheduled Tasks
 // ============================================
 function setupCronJobs() {
-    // 每小时检查过期验证
+    // Check expired verifications every hour
     cron.schedule('0 * * * *', async () => {
         console.log('⏰ Running NFT verification check...');
         await checkExpiredVerifications();
     });
 
-    // 每周一0点重置周活跃度
+    // Reset weekly activity every Monday at 0:00
     cron.schedule('0 0 * * 1', async () => {
         console.log('⏰ Resetting weekly activity...');
         await db.resetWeeklyActivity();
     });
 
-    // 每天发布排行榜（如果配置了频道）
+    // Publish leaderboard daily (if channel is configured)
     cron.schedule('0 12 * * *', async () => {
         console.log('⏰ Publishing daily leaderboard...');
         await leaderboardModule.generateAndPostAllLeaderboards();
@@ -1634,7 +1634,7 @@ function setupCronJobs() {
 }
 
 /**
- * 检查过期的NFT验证
+ * Check expired NFT verifications
  */
 async function checkExpiredVerifications() {
     try {
@@ -1643,7 +1643,7 @@ async function checkExpiredVerifications() {
 
         for (const user of expiredUsers) {
             try {
-                // 跳过没有明文钱包地址的旧记录（需要用户重新 /verify）
+                // Skip old records without clear wallet address (user needs to re-verify)
                 if (!user.wallet_address) {
                     console.log(`⚠️ Skipping user ${user.user_id}: no wallet_address (legacy hash-only record, needs re-verify)`);
                     continue;
@@ -1657,21 +1657,21 @@ async function checkExpiredVerifications() {
                 );
 
                 if (!result.success) {
-                    // NFT不足，移除角色
+                    // Insufficient NFTs, remove role
                     const guild = await client.guilds.fetch(user.guild_id);
                     const member = await guild.members.fetch(user.user_id).catch(() => null);
 
                     if (member) {
-                        // 移除角色
+                        // Remove role
                         if (user.verified_role_id) {
                             await member.roles.remove(user.verified_role_id).catch(() => { });
                         }
-                        // 删除验证记录
+                        // Delete verification record
                         await db.deleteVerifiedUser(user.guild_id, user.user_id);
                         console.log(`⚠️ Removed verification for ${user.user_id} (NFT insufficient)`);
                     }
                 } else {
-                    // 更新NFT余额和检查时间
+                    // Update NFT balance and check time
                     await db.upsertVerifiedUser({
                         guildId: user.guild_id,
                         userId: user.user_id,
@@ -1683,7 +1683,7 @@ async function checkExpiredVerifications() {
                 console.error(`Failed to check user ${user.user_id}:`, error.message);
             }
 
-            // 添加延迟避免API限制
+            // Add delay to avoid API limits
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
     } catch (error) {
@@ -1692,11 +1692,11 @@ async function checkExpiredVerifications() {
 }
 
 // ============================================
-// 优雅关闭
+// Graceful Shutdown
 // ============================================
 process.on('SIGINT', async () => {
     console.log('Shutting down bot...');
-    // 记录机器人关闭事件
+    // Log bot shutdown event
     securityLogger.logSecurityEvent(securityLogger.SECURITY_EVENTS.BOT_SHUTDOWN, {
         details: { reason: 'SIGINT', shutdownTime: new Date().toISOString() }
     });
@@ -1707,7 +1707,7 @@ process.on('SIGINT', async () => {
 
 process.on('SIGTERM', async () => {
     console.log('Shutting down bot...');
-    // 记录机器人关闭事件
+    // Log bot shutdown event
     securityLogger.logSecurityEvent(securityLogger.SECURITY_EVENTS.BOT_SHUTDOWN, {
         details: { reason: 'SIGTERM', shutdownTime: new Date().toISOString() }
     });
@@ -1717,6 +1717,6 @@ process.on('SIGTERM', async () => {
 });
 
 // ============================================
-// 启动机器人
+// Start bot
 // ============================================
 client.login(process.env.DISCORD_TOKEN);

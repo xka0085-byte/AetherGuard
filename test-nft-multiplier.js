@@ -11,7 +11,7 @@ function dbGet(sql, params) {
   });
 }
 
-// 模拟getNftMultiplier函数
+// Simulate getNftMultiplier function
 async function testNftMultiplier(guildId, userId, settings) {
   if (!settings.nft_bonus_enabled) {
     console.log('NFT bonus is DISABLED');

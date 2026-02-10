@@ -1,17 +1,17 @@
 /**
- * 文件名：db.js
- * 用途：数据库操作层（使用 sqlite3 异步模式）
+ * Filename: db.js
+ * Purpose: Database operation layer (using sqlite3 async mode)
  *
- * 测试方法：
- * 1. 运行 node index.js
- * 2. 应该看到 "✅ Database initialized"
- * 3. 检查是否生成 data.db 文件
+ * Test Method:
+ * 1. Run node index.js
+ * 2. Should see "✅ Database initialized"
+ * 3. Check if data.db file is generated
  *
- * 改动说明：
- * - 使用标准 sqlite3 库（异步回调模式）
- * - 所有操作使用 Promise 包装
- * - 查询语法使用 ? 占位符
- * - 钱包地址使用 SHA-256 哈希存储
+ * Change Notes:
+ * - Use standard sqlite3 library (async callback mode)
+ * - All operations wrapped with Promises
+ * - Query syntax using ? placeholders
+ * - Wallet address stored using SHA-256 hash
  */
 
 const sqlite3 = require('sqlite3').verbose();
@@ -22,9 +22,9 @@ const crypto = require('crypto');
 let db = null;
 
 /**
- * 将钱包地址转换为SHA-256哈希
- * @param {string} walletAddress - 钱包地址
- * @returns {string} - SHA-256哈希值
+ * Convert wallet address to SHA-256 hash
+ * @param {string} walletAddress - Wallet address
+ * @returns {string} - SHA-256 hash value
  */
 function hashWallet(walletAddress) {
   return crypto
@@ -34,7 +34,7 @@ function hashWallet(walletAddress) {
 }
 
 /**
- * 包装 db.run 为 Promise
+ * Wrap db.run as Promise
  */
 function dbRun(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -46,7 +46,7 @@ function dbRun(sql, params = []) {
 }
 
 /**
- * 包装 db.get 为 Promise
+ * Wrap db.get as Promise
  */
 function dbGet(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -58,7 +58,7 @@ function dbGet(sql, params = []) {
 }
 
 /**
- * 包装 db.all 为 Promise
+ * Wrap db.all as Promise
  */
 function dbAll(sql, params = []) {
   return new Promise((resolve, reject) => {
@@ -70,7 +70,7 @@ function dbAll(sql, params = []) {
 }
 
 /**
- * 包装 db.exec 为 Promise
+ * Wrap db.exec as Promise
  */
 function dbExec(sql) {
   return new Promise((resolve, reject) => {
@@ -82,8 +82,8 @@ function dbExec(sql) {
 }
 
 /**
- * 初始化数据库连接和表结构
- * @param {string} dbPath - 数据库文件路径，默认 ./data.db
+ * Initialize database connection and table structure
+ * @param {string} dbPath - Database file path, default ./data.db
  * @returns {Promise<void>}
  */
 async function initDatabase(dbPath = process.env.DATABASE_PATH || './data.db') {
@@ -96,37 +96,37 @@ async function initDatabase(dbPath = process.env.DATABASE_PATH || './data.db') {
       }
 
       try {
-        // 启用 WAL 模式以提高性能
+        // Enable WAL mode for better performance
         await dbRun('PRAGMA journal_mode = WAL');
         await dbRun('PRAGMA busy_timeout = 5000');
 
-        // 读取并执行 schema.sql
+        // Read and execute schema.sql
         const schemaPath = path.join(__dirname, 'schema.sql');
         if (fs.existsSync(schemaPath)) {
           const schema = fs.readFileSync(schemaPath, 'utf8');
           await dbExec(schema);
         }
 
-        // 迁移：为现有 communities 表添加 chain 列（如果不存在）
+        // Migration: Add chain column to existing communities table (if not exists)
         try {
           await dbRun(`ALTER TABLE communities ADD COLUMN chain TEXT DEFAULT 'ethereum'`);
           console.log('✅ Migration: Added chain column to communities table');
         } catch (e) {
-          // 列已存在，忽略错误
+          // Column already exists, ignore error
           if (!e.message.includes('duplicate column')) {
             console.log('ℹ️ Chain column already exists');
           }
         }
 
-        // 迁移：为现有 verified_users 表添加 wallet_address 列（明文，用于重新验证）
+        // Migration: Add wallet_address column to existing verified_users table (plain text, for re-verification)
         try {
           await dbRun(`ALTER TABLE verified_users ADD COLUMN wallet_address TEXT`);
           console.log('✅ Migration: Added wallet_address column to verified_users table');
         } catch (e) {
-          // 列已存在，忽略错误
+          // Column already exists, ignore error
         }
 
-        // 迁移：清理重复的 wallet_address 并创建唯一索引（同一服务器同一钱包只允许一个用户）
+        // Migration: Clean up duplicate wallet_address and create unique index (only one user allowed per wallet per guild)
         try {
           await dbRun(`
             UPDATE verified_users SET wallet_address = NULL
@@ -147,7 +147,7 @@ async function initDatabase(dbPath = process.env.DATABASE_PATH || './data.db') {
           }
         }
 
-        // 简易支付：创建 payments 表（如果不存在）
+        // Simple payment: Create payments table (if not exists)
         try {
           await dbRun(`
             CREATE TABLE IF NOT EXISTS payments (
@@ -170,7 +170,7 @@ async function initDatabase(dbPath = process.env.DATABASE_PATH || './data.db') {
           console.error('❌ Failed to ensure payments table:', e.message);
         }
 
-        // 创建 guilds 表（跟踪服务器与加入顺序）
+        // Create guilds table (track servers and join order)
         try {
           await dbRun(`
             CREATE TABLE IF NOT EXISTS guilds (
@@ -185,7 +185,7 @@ async function initDatabase(dbPath = process.env.DATABASE_PATH || './data.db') {
           console.error('❌ Failed to ensure guilds table:', e.message);
         }
 
-        // 创建 subscriptions 表（服务器级订阅）
+        // Create subscriptions table (server-level subscription)
         try {
           await dbRun(`
             CREATE TABLE IF NOT EXISTS subscriptions (
@@ -219,7 +219,7 @@ async function initDatabase(dbPath = process.env.DATABASE_PATH || './data.db') {
 }
 
 /**
- * 获取数据库实例
+ * Get database instance
  */
 function getDb() {
   if (!db) {
@@ -229,7 +229,7 @@ function getDb() {
 }
 
 /**
- * 关闭数据库连接
+ * Close database connection
  * @returns {Promise<void>}
  */
 function closeDatabase() {
@@ -250,21 +250,21 @@ function closeDatabase() {
   });
 }
 
-// ==================== 社区配置操作 ====================
+// ==================== Community Configuration Operations ====================
 
 /**
- * 获取社区配置
- * @param {string} guildId - Discord 服务器 ID
- * @returns {Promise<Object|null>} 社区配置对象或 null
+ * Get community configuration
+ * @param {string} guildId - Discord Guild ID
+ * @returns {Promise<Object|null>} Community configuration object or null
  */
 async function getCommunity(guildId) {
   return dbGet('SELECT * FROM communities WHERE guild_id = ?', [guildId]);
 }
 
 /**
- * 创建或更新社区配置（仅NFT验证相关）
- * @param {Object} data - 配置数据
- * @returns {Promise<Object>} 更新后的配置
+ * Create or update community configuration (NFT verification related only)
+ * @param {Object} data - Configuration data
+ * @returns {Promise<Object>} Updated configuration
  */
 async function upsertCommunity(data) {
   const {
@@ -300,9 +300,9 @@ async function upsertCommunity(data) {
 }
 
 /**
- * 更新社区配置（部分更新）
- * @param {string} guildId - Discord 服务器 ID
- * @param {Object} updates - 要更新的字段
+ * Update community configuration (partial update)
+ * @param {string} guildId - Discord Guild ID
+ * @param {Object} updates - Fields to update
  * @returns {Promise<Object|null>}
  */
 async function updateCommunity(guildId, updates) {
@@ -329,21 +329,21 @@ async function updateCommunity(guildId, updates) {
   return getCommunity(guildId);
 }
 
-// ==================== 活跃度设置操作 ====================
+// ==================== Activity Settings Operations ====================
 
 /**
- * 获取活跃度设置
- * @param {string} guildId - Discord 服务器 ID
- * @returns {Promise<Object|null>} 活跃度设置对象或 null
+ * Get activity settings
+ * @param {string} guildId - Discord Guild ID
+ * @returns {Promise<Object|null>} Activity settings object or null
  */
 async function getActivitySettings(guildId) {
   return dbGet('SELECT * FROM activity_settings WHERE guild_id = ?', [guildId]);
 }
 
 /**
- * 创建或更新活跃度设置
- * @param {Object} data - 配置数据
- * @returns {Promise<Object>} 更新后的配置
+ * Create or update activity settings
+ * @param {Object} data - Configuration data
+ * @returns {Promise<Object>} Updated configuration
  */
 async function upsertActivitySettings(data) {
   const {
@@ -353,12 +353,12 @@ async function upsertActivitySettings(data) {
     replyScore = 2.0,
     reactionScore = 0.5,
     voiceScore = 0.1,
-    // 每日积分上限
+    // Daily point cap
     dailyMessageCap = 100,
     dailyReplyCap = 50,
     dailyReactionCap = 50,
     dailyVoiceCap = 120,
-    // NFT持有量加成
+    // NFT holding bonus
     nftBonusEnabled = 0,
     nftTier1Count = 1,
     nftTier1Multiplier = 1.0,
@@ -423,44 +423,44 @@ async function upsertActivitySettings(data) {
 }
 
 /**
- * 获取所有启用活跃度追踪的服务器
- * @returns {Promise<Array>} 服务器列表
+ * Get all guilds with activity tracking enabled
+ * @returns {Promise<Array>} Guild list
  */
 async function getEnabledActivityGuilds() {
   return dbAll('SELECT * FROM activity_settings WHERE enabled = 1');
 }
 
-// ==================== 已验证用户操作 ====================
+// ==================== Verified User Operations ====================
 
 /**
- * 获取已验证用户
- * @param {string} guildId - Discord 服务器 ID
- * @param {string} userId - Discord 用户 ID
- * @returns {Promise<Object|null>} 用户对象或 null
+ * Get verified user
+ * @param {string} guildId - Discord Guild ID
+ * @param {string} userId - Discord User ID
+ * @returns {Promise<Object|null>} User object or null
  */
 async function getVerifiedUser(guildId, userId) {
   return dbGet('SELECT * FROM verified_users WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
 }
 
 /**
- * 根据钱包地址哈希获取已验证用户
- * @param {string} guildId - Discord 服务器 ID
- * @param {string} walletAddress - 钱包地址（将自动转换为哈希）
- * @returns {Promise<Object|null>} 用户对象或 null
+ * Get verified user by wallet address hash
+ * @param {string} guildId - Discord Guild ID
+ * @param {string} walletAddress - Wallet address (will be automatically converted to hash)
+ * @returns {Promise<Object|null>} User object or null
  */
 async function getVerifiedUserByWallet(guildId, walletAddress) {
   const walletLower = walletAddress.toLowerCase();
   const row = await dbGet('SELECT * FROM verified_users WHERE guild_id = ? AND wallet_address = ?', [guildId, walletLower]);
   if (row) return row;
-  // 兼容旧数据：回退到 wallet_hash 查询
+  // Compatibility with old data: fallback to wallet_hash query
   const walletHash = hashWallet(walletAddress);
   return dbGet('SELECT * FROM verified_users WHERE guild_id = ? AND wallet_hash = ?', [guildId, walletHash]);
 }
 
 /**
- * 创建或更新已验证用户
- * @param {Object} data - 用户数据
- * @returns {Promise<Object>} 用户对象
+ * Create or update verified user
+ * @param {Object} data - User data
+ * @returns {Promise<Object>} User object
  */
 async function upsertVerifiedUser(data) {
   const { guildId, userId, walletAddress, nftBalance } = data;
@@ -481,11 +481,11 @@ async function upsertVerifiedUser(data) {
 }
 
 /**
- * 检查钱包是否已被同一服务器的其他用户使用
- * @param {string} guildId - Discord 服务器 ID
- * @param {string} userId - 当前用户 ID
- * @param {string} walletAddress - 钱包地址
- * @returns {Promise<boolean>} 是否已被其他用户使用
+ * Check if the wallet is already used by another user in the same guild
+ * @param {string} guildId - Discord Guild ID
+ * @param {string} userId - Current User ID
+ * @param {string} walletAddress - Wallet address
+ * @returns {Promise<boolean>} Whether it is used by another user
  */
 async function isWalletUsedByOther(guildId, userId, walletAddress) {
   const walletLower = walletAddress.toLowerCase();
@@ -494,7 +494,7 @@ async function isWalletUsedByOther(guildId, userId, walletAddress) {
     [guildId, walletLower, userId]
   );
   if (row) return true;
-  // 兼容旧数据：检查无 wallet_address 的 wallet_hash 记录
+  // Compatibility with old data: check wallet_hash records without wallet_address
   const walletHash = hashWallet(walletAddress);
   const hashRow = await dbGet(
     'SELECT user_id FROM verified_users WHERE guild_id = ? AND wallet_hash = ? AND wallet_address IS NULL AND user_id != ?',
@@ -504,9 +504,9 @@ async function isWalletUsedByOther(guildId, userId, walletAddress) {
 }
 
 /**
- * 删除已验证用户
- * @param {string} guildId - Discord 服务器 ID
- * @param {string} userId - Discord 用户 ID
+ * Delete verified user
+ * @param {string} guildId - Discord Guild ID
+ * @param {string} userId - Discord User ID
  * @returns {Promise<void>}
  */
 async function deleteVerifiedUser(guildId, userId) {
@@ -514,10 +514,10 @@ async function deleteVerifiedUser(guildId, userId) {
 }
 
 /**
- * 获取所有已验证用户
- * @param {string} guildId - Discord 服务器 ID
- * @param {number} limit - 最大返回数量
- * @returns {Promise<Array>} 用户列表
+ * Get all verified users
+ * @param {string} guildId - Discord Guild ID
+ * @param {number} limit - Max return limit
+ * @returns {Promise<Array>} User list
  */
 async function getVerifiedUsers(guildId, limit = 100) {
   return dbAll(`
@@ -529,9 +529,9 @@ async function getVerifiedUsers(guildId, limit = 100) {
 }
 
 /**
- * 获取服务器已验证用户数量
- * @param {string} guildId - Discord 服务器 ID
- * @returns {Promise<number>} 已验证用户数
+ * Get number of verified users in the guild
+ * @param {string} guildId - Discord Guild ID
+ * @returns {Promise<number>} Number of verified users
  */
 async function getVerifiedCount(guildId) {
   const row = await dbGet('SELECT COUNT(*) AS total FROM verified_users WHERE guild_id = ?', [guildId]);
@@ -539,9 +539,9 @@ async function getVerifiedCount(guildId) {
 }
 
 /**
- * 获取需要重新验证的用户（超过指定时间未检查）
- * @param {number} intervalMs - 时间间隔（毫秒）
- * @returns {Promise<Array>} 用户列表
+ * Get users needing re-verification (not checked for specified time)
+ * @param {number} intervalMs - Time interval (milliseconds)
+ * @returns {Promise<Array>} User list
  */
 async function getUsersNeedingReverification(intervalMs) {
   const threshold = new Date(Date.now() - intervalMs).toISOString();
@@ -549,9 +549,9 @@ async function getUsersNeedingReverification(intervalMs) {
 }
 
 /**
- * 获取过期验证的用户（关联社区配置）
- * @param {number} hours - 过期小时数
- * @returns {Promise<Array>} 用户列表
+ * Get users with expired verification (associated with community config)
+ * @param {number} hours - Expiry hours
+ * @returns {Promise<Array>} User list
  */
 async function getExpiredVerifications(hours) {
   return dbAll(`
@@ -563,10 +563,10 @@ async function getExpiredVerifications(hours) {
 }
 
 /**
- * 更新最后检查时间和NFT余额
- * @param {string} guildId - Discord 服务器 ID
- * @param {string} userId - Discord 用户 ID
- * @param {number} nftBalance - NFT 持有数量
+ * Update last check time and NFT balance
+ * @param {string} guildId - Discord Guild ID
+ * @param {string} userId - Discord User ID
+ * @param {number} nftBalance - NFT balance
  * @returns {Promise<void>}
  */
 async function updateLastChecked(guildId, userId, nftBalance) {
@@ -577,24 +577,24 @@ async function updateLastChecked(guildId, userId, nftBalance) {
   `, [nftBalance, guildId, userId]);
 }
 
-// ==================== 活跃度追踪操作 ====================
+// ==================== Activity Tracking Operations ====================
 
 /**
- * 获取用户活跃度
- * @param {string} guildId - Discord 服务器 ID
- * @param {string} userId - Discord 用户 ID
- * @returns {Promise<Object|null>} 活跃度数据或 null
+ * Get user activity
+ * @param {string} guildId - Discord Guild ID
+ * @param {string} userId - Discord User ID
+ * @returns {Promise<Object|null>} Activity data or null
  */
 async function getUserActivity(guildId, userId) {
   return dbGet('SELECT * FROM activity_tracking WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
 }
 
 /**
- * 获取排行榜
- * @param {string} guildId - Discord 服务器 ID
- * @param {number} limit - 最大返回数量
- * @param {string} type - 排行榜类型 ('total' 或 'week')
- * @returns {Promise<Array>} 排行榜数据
+ * Get leaderboard
+ * @param {string} guildId - Discord Guild ID
+ * @param {number} limit - Max return limit
+ * @param {string} type - Leaderboard type ('total' or 'week')
+ * @returns {Promise<Array>} Leaderboard data
  */
 async function getLeaderboard(guildId, limit = 10, type = 'total') {
   const scoreField = type === 'week' ? 'week_score' : 'total_score';
@@ -607,10 +607,10 @@ async function getLeaderboard(guildId, limit = 10, type = 'total') {
 }
 
 /**
- * 获取用户排名
- * @param {string} guildId - Discord 服务器 ID
- * @param {string} userId - Discord 用户 ID
- * @returns {Promise<number>} 排名（从1开始）
+ * Get user rank
+ * @param {string} guildId - Discord Guild ID
+ * @param {string} userId - Discord User ID
+ * @returns {Promise<number>} Rank (starting from 1)
  */
 async function getUserRank(guildId, userId) {
   const userActivity = await getUserActivity(guildId, userId);
@@ -625,9 +625,9 @@ async function getUserRank(guildId, userId) {
 }
 
 /**
- * 获取追踪的用户总数
- * @param {string} guildId - Discord 服务器 ID
- * @returns {Promise<number>} 用户总数
+ * Get total number of tracked users
+ * @param {string} guildId - Discord Guild ID
+ * @returns {Promise<number>} Total number of users
  */
 async function getTotalTrackedUsers(guildId) {
   const result = await dbGet('SELECT COUNT(*) as total FROM activity_tracking WHERE guild_id = ?', [guildId]);
@@ -635,11 +635,11 @@ async function getTotalTrackedUsers(guildId) {
 }
 
 /**
- * 获取用户的NFT持有量加成倍率
- * @param {string} guildId - Discord 服务器 ID
- * @param {string} userId - Discord 用户 ID
- * @param {Object} settings - 活跃度设置
- * @returns {Promise<number>} 倍率
+ * Get user's NFT holding bonus multiplier
+ * @param {string} guildId - Discord Guild ID
+ * @param {string} userId - Discord User ID
+ * @param {Object} settings - Activity settings
+ * @returns {Promise<number>} Multiplier
  */
 async function getNftMultiplier(guildId, userId, settings) {
   if (!settings.nft_bonus_enabled) return 1.0;
@@ -649,7 +649,7 @@ async function getNftMultiplier(guildId, userId, settings) {
 
   const nftBalance = verifiedUser.nft_balance || 0;
 
-  // 检查各档位（从高到低）
+  // Check each tier (from high to low)
   if (nftBalance >= settings.nft_tier3_count) {
     return settings.nft_tier3_multiplier || 1.5;
   } else if (nftBalance >= settings.nft_tier2_count) {
@@ -662,10 +662,10 @@ async function getNftMultiplier(guildId, userId, settings) {
 }
 
 /**
- * 获取用户今日活跃度数据（如果是新的一天则重置）
- * @param {string} guildId - Discord 服务器 ID
- * @param {string} userId - Discord 用户 ID
- * @returns {Promise<Object>} 今日数据
+ * Get user's daily activity data (reset if it's a new day)
+ * @param {string} guildId - Discord Guild ID
+ * @param {string} userId - Discord User ID
+ * @returns {Promise<Object>} Today's data
  */
 async function getDailyActivity(guildId, userId) {
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
@@ -685,7 +685,7 @@ async function getDailyActivity(guildId, userId) {
     };
   }
 
-  // 如果是新的一天，重置每日计数器
+  // If it's a new day, reset daily counters
   if (activity.daily_reset_date !== today) {
     await dbRun(`
       UPDATE activity_tracking SET
@@ -710,19 +710,19 @@ async function getDailyActivity(guildId, userId) {
 }
 
 /**
- * 批量更新活跃度（带每日上限和NFT加成）
- * @param {Array} updates - 更新数组
- * @param {Object} settings - 活跃度设置
+ * Batch update activity (with daily caps and NFT bonus)
+ * @param {Array} updates - Update array
+ * @param {Object} settings - Activity settings
  * @returns {Promise<void>}
  */
 async function batchUpdateActivity(updates, settings = null) {
-  // 默认分数
+  // Default scores
   const messageScore = settings?.message_score ?? 1;
   const replyScore = settings?.reply_score ?? 2;
   const reactionScore = settings?.reaction_score ?? 0.5;
   const voiceScore = settings?.voice_score ?? 0.1;
 
-  // 每日上限
+  // Daily caps
   const dailyMessageCap = settings?.daily_message_cap ?? 100;
   const dailyReplyCap = settings?.daily_reply_cap ?? 50;
   const dailyReactionCap = settings?.daily_reaction_cap ?? 50;
@@ -733,10 +733,10 @@ async function batchUpdateActivity(updates, settings = null) {
   for (const update of updates) {
     const { guildId, userId, message_count = 0, reply_count = 0, reaction_count = 0, voice_minutes = 0 } = update;
 
-    // 获取今日活跃度数据
+    // Get today's activity data
     const dailyData = await getDailyActivity(guildId, userId);
 
-    // 计算可计分的数量（考虑每日上限）
+    // Calculate countable amount (consider daily caps)
     const effectiveMessages = Math.min(
       message_count,
       Math.max(0, dailyMessageCap - dailyData.daily_messages)
@@ -754,15 +754,15 @@ async function batchUpdateActivity(updates, settings = null) {
       Math.max(0, dailyVoiceCap - dailyData.daily_voice)
     );
 
-    // 如果所有计数都超过上限，跳过
+    // If all counts exceed caps, skip
     if (effectiveMessages === 0 && effectiveReplies === 0 && effectiveReactions === 0 && effectiveVoice === 0) {
       continue;
     }
 
-    // 获取NFT持有量加成
+    // Get NFT holding bonus
     const nftMultiplier = settings ? await getNftMultiplier(guildId, userId, settings) : 1.0;
 
-    // 计算总分（使用自定义分数和NFT加成）
+    // Calculate total score (using custom scores and NFT bonus)
     const baseScore =
       effectiveMessages * messageScore +
       effectiveReplies * replyScore +
@@ -803,11 +803,11 @@ async function batchUpdateActivity(updates, settings = null) {
 }
 
 /**
- * 减少活跃度（用于消息删除时）
- * @param {string} guildId - Discord 服务器 ID
- * @param {string} userId - Discord 用户 ID
- * @param {string} type - 类型 ('message' 或 'reply')
- * @param {number} value - 减少的数量
+ * Decrement activity (used when messages are deleted)
+ * @param {string} guildId - Discord Guild ID
+ * @param {string} userId - Discord User ID
+ * @param {string} type - Type ('message' or 'reply')
+ * @param {number} value - Amount to decrement
  * @returns {Promise<void>}
  */
 async function decrementActivity(guildId, userId, type, value = 1) {
@@ -826,8 +826,8 @@ async function decrementActivity(guildId, userId, type, value = 1) {
 }
 
 /**
- * 重置周活跃度分数
- * @param {string} guildId - Discord 服务器 ID（可选，不传则重置所有）
+ * Reset weekly activity scores
+ * @param {string} guildId - Discord Guild ID (optional, reset all if omitted)
  * @returns {Promise<void>}
  */
 async function resetWeeklyScores(guildId = null) {
@@ -839,7 +839,7 @@ async function resetWeeklyScores(guildId = null) {
 }
 
 /**
- * 重置周活跃度��全部）
+ * Reset weekly activity (all)
  * @returns {Promise<void>}
  */
 async function resetWeeklyActivity() {
@@ -847,10 +847,10 @@ async function resetWeeklyActivity() {
 }
 
 /**
- * 获取服务器所有用户的活跃度数据（支持时间范围过滤）
- * @param {string} guildId - Discord 服务器 ID
- * @param {Object} options - 查询选项
- * @returns {Promise<Array>} 活跃度数据列表
+ * Get activity data for all users in the guild (supports date range filtering)
+ * @param {string} guildId - Discord Guild ID
+ * @param {Object} options - Query options
+ * @returns {Promise<Array>} Activity data list
  */
 async function getAllActivityData(guildId, options = {}) {
   const {
@@ -885,9 +885,9 @@ async function getAllActivityData(guildId, options = {}) {
 }
 
 /**
- * 获取服务器活跃度统计摘要
- * @param {string} guildId - Discord 服务器 ID
- * @returns {Promise<Object>} 统计摘要
+ * Get guild activity statistical summary
+ * @param {string} guildId - Discord Guild ID
+ * @returns {Promise<Object>} Statistical summary
  */
 async function getActivitySummary(guildId) {
   const result = await dbGet(`
@@ -906,23 +906,23 @@ async function getActivitySummary(guildId) {
 }
 
 module.exports = {
-  // 数据库管理
+  // Database Management
   initDatabase,
   getDb,
   closeDatabase,
   hashWallet,
 
-  // 社区配置（NFT验证）
+  // Community Configuration (NFT Verification)
   getCommunity,
   upsertCommunity,
   updateCommunity,
 
-  // 活跃度设置
+  // Activity Settings
   getActivitySettings,
   upsertActivitySettings,
   getEnabledActivityGuilds,
 
-  // 已验证用户
+  // Verified User
   getVerifiedUser,
   getVerifiedUserByWallet,
   upsertVerifiedUser,
@@ -934,7 +934,7 @@ module.exports = {
   getExpiredVerifications,
   updateLastChecked,
 
-  // 活跃度追踪
+  // Activity Tracking
   getUserActivity,
   getLeaderboard,
   getUserRank,
@@ -948,7 +948,7 @@ module.exports = {
   getNftMultiplier,
   getDailyActivity,
 
-  // 支付记录（简版）
+  // Payment Records (Simple version)
   getPaymentByTx: async function (txHash) {
     return dbGet('SELECT * FROM payments WHERE tx_hash = ?', [txHash.toLowerCase()]);
   },
@@ -964,14 +964,14 @@ module.exports = {
       return true;
     } catch (e) {
       if (e && e.message && e.message.includes('UNIQUE')) {
-        // 交易已被其他请求记录（竞态条件），返回 false 阻止重复激活订阅
+        // Transaction already recorded by another request (race condition), return false to prevent duplicate subscription activation
         return false;
       }
       throw e;
     }
   },
 
-  // ===== 服务器（Guild）追踪 =====
+  // ===== Guild Tracking =====
   addGuildIfNotExists: async function (guildId, name = null) {
     const existing = await dbGet('SELECT * FROM guilds WHERE guild_id = ?', [guildId]);
     if (existing) {
@@ -996,7 +996,7 @@ module.exports = {
     return (row.join_order || 0) > 0 && row.join_order <= foundingLimit;
   },
 
-  // ===== 订阅（Subscriptions） =====
+  // ===== Subscriptions =====
   isGuildSubscribed: async function (guildId, graceDays = 0) {
     const row = await dbGet(
       `SELECT COUNT(*) AS c FROM subscriptions

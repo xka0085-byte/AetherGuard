@@ -1,113 +1,113 @@
 -- ============================================================
--- Discord NFT Bot - 简化数据库Schema (SQLite)
+-- Discord NFT Bot - Simplified Database Schema (SQLite)
 -- ============================================================
 
--- 表1：社区配置
--- 存储每个Discord服务器的NFT验证配置
+-- Table 1: Community Configuration
+-- Store NFT verification configuration for each Discord guild
 CREATE TABLE IF NOT EXISTS communities (
-  guild_id TEXT PRIMARY KEY,              -- Discord服务器ID
-  nft_contract_address TEXT NOT NULL,     -- NFT合约地址
-  chain TEXT DEFAULT 'ethereum',          -- 区块链网络 (ethereum, polygon, base)
-  required_amount INTEGER DEFAULT 1,       -- 最低NFT持有数量
-  verified_role_id TEXT,                  -- 验证成功后分配的角色ID
-  kick_delay_hours INTEGER DEFAULT 24,     -- 移除角色前的延迟时间(小时)
+  guild_id TEXT PRIMARY KEY,              -- Discord Guild ID
+  nft_contract_address TEXT NOT NULL,     -- NFT contract address
+  chain TEXT DEFAULT 'ethereum',          -- Blockchain network (ethereum, polygon, base)
+  required_amount INTEGER DEFAULT 1,       -- Minimum NFT amount required
+  verified_role_id TEXT,                  -- Role ID to assign after successful verification
+  kick_delay_hours INTEGER DEFAULT 24,     -- Delay time before removing role (hours)
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
--- 表2：活跃度配置（独立于NFT验证）
--- 存储每个Discord服务器的活跃度追踪配置
+-- Table 2: Activity Settings (Independent of NFT verification)
+-- Store activity tracking configuration for each Discord guild
 CREATE TABLE IF NOT EXISTS activity_settings (
-  guild_id TEXT PRIMARY KEY,              -- Discord服务器ID
-  enabled INTEGER DEFAULT 0,               -- 是否启用活跃度追踪 (1=是, 0=否)
-  message_score REAL DEFAULT 1.0,          -- 发消息得分
-  reply_score REAL DEFAULT 2.0,            -- 回复得分
-  reaction_score REAL DEFAULT 0.5,         -- 表情反应得分
-  voice_score REAL DEFAULT 0.1,            -- 语音时长得分(每分钟)
-  -- 每日积分上限（功能1）
-  daily_message_cap INTEGER DEFAULT 100,   -- 每日消息计分上限
-  daily_reply_cap INTEGER DEFAULT 50,      -- 每日回复计分上限
-  daily_reaction_cap INTEGER DEFAULT 50,   -- 每日反应计分上限
-  daily_voice_cap INTEGER DEFAULT 120,     -- 每日语音分钟上限
-  -- NFT持有量加成（功能3）
-  nft_bonus_enabled INTEGER DEFAULT 0,     -- 是否启用NFT持有量加成
-  nft_tier1_count INTEGER DEFAULT 1,       -- 第1档：持有数量
-  nft_tier1_multiplier REAL DEFAULT 1.0,   -- 第1档：积分倍率
-  nft_tier2_count INTEGER DEFAULT 3,       -- 第2档：持有数量
-  nft_tier2_multiplier REAL DEFAULT 1.2,   -- 第2档：积分倍率 (20%加成)
-  nft_tier3_count INTEGER DEFAULT 5,       -- 第3档：持有数量
-  nft_tier3_multiplier REAL DEFAULT 1.5,   -- 第3档：积分倍率 (50%加成)
-  tracking_channels TEXT,                  -- 追踪的频道ID列表(JSON数组)
-  leaderboard_channel_id TEXT,             -- 排行榜发布频道ID
+  guild_id TEXT PRIMARY KEY,              -- Discord Guild ID
+  enabled INTEGER DEFAULT 0,               -- Whether to enable activity tracking (1=Yes, 0=No)
+  message_score REAL DEFAULT 1.0,          -- Points for sending a message
+  reply_score REAL DEFAULT 2.0,            -- Points for replying
+  reaction_score REAL DEFAULT 0.5,         -- Points for emoji reaction
+  voice_score REAL DEFAULT 0.1,            -- Points for voice duration (per minute)
+  -- Daily point caps (Feature 1)
+  daily_message_cap INTEGER DEFAULT 100,   -- Daily message point cap
+  daily_reply_cap INTEGER DEFAULT 50,      -- Daily reply point cap
+  daily_reaction_cap INTEGER DEFAULT 50,   -- Daily reaction point cap
+  daily_voice_cap INTEGER DEFAULT 120,     -- Daily voice minutes cap
+  -- NFT holding bonus (Feature 3)
+  nft_bonus_enabled INTEGER DEFAULT 0,     -- Whether to enable NFT holding bonus
+  nft_tier1_count INTEGER DEFAULT 1,       -- Tier 1: Holding count
+  nft_tier1_multiplier REAL DEFAULT 1.0,   -- Tier 1: Point multiplier
+  nft_tier2_count INTEGER DEFAULT 3,       -- Tier 2: Holding count
+  nft_tier2_multiplier REAL DEFAULT 1.2,   -- Tier 2: Point multiplier (20% bonus)
+  nft_tier3_count INTEGER DEFAULT 5,       -- Tier 3: Holding count
+  nft_tier3_multiplier REAL DEFAULT 1.5,   -- Tier 3: Point multiplier (50% bonus)
+  tracking_channels TEXT,                  -- List of tracked channel IDs (JSON array)
+  leaderboard_channel_id TEXT,             -- Leaderboard posting channel ID
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
--- 表3：已验证用户
--- 存储通过NFT验证的用户信息
+-- Table 3: Verified Users
+-- Store information of users who passed NFT verification
 CREATE TABLE IF NOT EXISTS verified_users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  guild_id TEXT NOT NULL,                 -- Discord服务器ID
-  user_id TEXT NOT NULL,                  -- Discord用户ID
-  wallet_address TEXT,                    -- 钱包地址明文（小写，用于定期重新验证）
-  wallet_hash TEXT NOT NULL,              -- 钱包地址的SHA-256哈希（历史兼容）
-  nft_balance INTEGER DEFAULT 0,          -- NFT持有数量
-  verified_at TEXT DEFAULT CURRENT_TIMESTAMP,  -- 首次验证时间
-  last_checked TEXT DEFAULT CURRENT_TIMESTAMP, -- 最后检查时间
-  UNIQUE(guild_id, user_id)               -- 每个服务器每个用户只能有一条记录
+  guild_id TEXT NOT NULL,                 -- Discord Guild ID
+  user_id TEXT NOT NULL,                  -- Discord User ID
+  wallet_address TEXT,                    -- Plain text wallet address (lowercase, used for periodic re-verification)
+  wallet_hash TEXT NOT NULL,              -- SHA-256 hash of wallet address (historical compatibility)
+  nft_balance INTEGER DEFAULT 0,          -- NFT balance
+  verified_at TEXT DEFAULT CURRENT_TIMESTAMP,  -- Initial verification time
+  last_checked TEXT DEFAULT CURRENT_TIMESTAMP, -- Last check time
+  UNIQUE(guild_id, user_id)               -- Each user can only have one record per guild
 );
 
--- 表4：活跃度追踪
--- 存储用户在社区的活跃度数据
+-- Table 4: Activity Tracking
+-- Store user activity data in the community
 CREATE TABLE IF NOT EXISTS activity_tracking (
-  guild_id TEXT NOT NULL,                 -- Discord服务器ID
-  user_id TEXT NOT NULL,                  -- Discord用户ID
-  message_count INTEGER DEFAULT 0,        -- 消息数量
-  reply_count INTEGER DEFAULT 0,          -- 回复数量
-  reaction_count INTEGER DEFAULT 0,       -- 表情反应数量
-  voice_minutes INTEGER DEFAULT 0,        -- 语音时长(分钟)
-  total_score INTEGER DEFAULT 0,          -- 总活跃度分数
-  week_score INTEGER DEFAULT 0,           -- 本周活跃度分数
-  -- 每日计数器（功能1：每日积分上限）
-  daily_messages INTEGER DEFAULT 0,       -- 今日消息计数
-  daily_replies INTEGER DEFAULT 0,        -- 今日回复计数
-  daily_reactions INTEGER DEFAULT 0,      -- 今日反应计数
-  daily_voice INTEGER DEFAULT 0,          -- 今日语音分钟数
-  daily_reset_date TEXT,                  -- 每日计数器重置日期(YYYY-MM-DD)
-  last_active TEXT DEFAULT CURRENT_TIMESTAMP, -- 最后活跃时间
+  guild_id TEXT NOT NULL,                 -- Discord Guild ID
+  user_id TEXT NOT NULL,                  -- Discord User ID
+  message_count INTEGER DEFAULT 0,        -- Message count
+  reply_count INTEGER DEFAULT 0,          -- Reply count
+  reaction_count INTEGER DEFAULT 0,       -- Emoji reaction count
+  voice_minutes INTEGER DEFAULT 0,        -- Voice duration (minutes)
+  total_score INTEGER DEFAULT 0,          -- Total activity score
+  week_score INTEGER DEFAULT 0,           -- Weekly activity score
+  -- Daily counters (Feature 1: Daily point caps)
+  daily_messages INTEGER DEFAULT 0,       -- Today's message count
+  daily_replies INTEGER DEFAULT 0,        -- Today's reply count
+  daily_reactions INTEGER DEFAULT 0,      -- Today's reaction count
+  daily_voice INTEGER DEFAULT 0,          -- Today's voice minutes
+  daily_reset_date TEXT,                  -- Daily counter reset date (YYYY-MM-DD)
+  last_active TEXT DEFAULT CURRENT_TIMESTAMP, -- Last active time
   PRIMARY KEY(guild_id, user_id)
 );
 
--- 表5：审计日志
--- 存储管理员操作和安全事件（持久化存储）
+-- Table 5: Audit Logs
+-- Store administrator operations and security events (persistent storage)
 CREATE TABLE IF NOT EXISTS audit_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  guild_id TEXT NOT NULL,                 -- Discord服务器ID
-  event_type TEXT NOT NULL,               -- 事件类型
-  admin_id TEXT,                          -- 操作管理员ID（如有）
-  admin_tag TEXT,                         -- 管理员标签（如 Admin#1234）
-  target_user_id TEXT,                    -- 目标用户ID（如有）
-  details TEXT,                           -- 事件详情（JSON格式）
-  ip_info TEXT,                           -- 额外信息（Discord无法获取真实IP）
+  guild_id TEXT NOT NULL,                 -- Discord Guild ID
+  event_type TEXT NOT NULL,               -- Event type
+  admin_id TEXT,                          -- Admin ID (if any)
+  admin_tag TEXT,                         -- Admin tag (e.g. Admin#1234)
+  target_user_id TEXT,                    -- Target user ID (if any)
+  details TEXT,                           -- Event details (JSON format)
+  ip_info TEXT,                           -- Extra info (Discord cannot get real IP)
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
--- 表6：用户行为记录
--- 存储用户行为模式用于安全分析
+-- Table 6: User Behavior Records
+-- Store user behavior patterns for security analysis
 CREATE TABLE IF NOT EXISTS user_behavior (
-  guild_id TEXT NOT NULL,                 -- Discord服务器ID
-  user_id TEXT NOT NULL,                  -- Discord用户ID
-  first_seen TEXT DEFAULT CURRENT_TIMESTAMP,  -- 首次出现时间
-  last_seen TEXT DEFAULT CURRENT_TIMESTAMP,   -- 最后活跃时间
-  verify_attempts INTEGER DEFAULT 0,       -- 验证尝试次数
-  command_count INTEGER DEFAULT 0,         -- 命令使用次数
-  flags TEXT,                              -- 标记列表（JSON数组）
-  risk_score INTEGER DEFAULT 0,            -- 风险评分 (0-100)
-  notes TEXT,                              -- 备注
+  guild_id TEXT NOT NULL,                 -- Discord Guild ID
+  user_id TEXT NOT NULL,                  -- Discord User ID
+  first_seen TEXT DEFAULT CURRENT_TIMESTAMP,  -- First seen time
+  last_seen TEXT DEFAULT CURRENT_TIMESTAMP,   -- Last active time
+  verify_attempts INTEGER DEFAULT 0,       -- Verification attempt count
+  command_count INTEGER DEFAULT 0,         -- Command usage count
+  flags TEXT,                              -- Flags list (JSON array)
+  risk_score INTEGER DEFAULT 0,            -- Risk score (0-100)
+  notes TEXT,                              -- Notes
   PRIMARY KEY(guild_id, user_id)
 );
 
--- 创建索引以提高查询性能
+-- Create indexes to improve query performance
 CREATE INDEX IF NOT EXISTS idx_verified_users_guild ON verified_users(guild_id);
 CREATE INDEX IF NOT EXISTS idx_verified_users_wallet_hash ON verified_users(wallet_hash);
 CREATE INDEX IF NOT EXISTS idx_verified_users_wallet_address ON verified_users(wallet_address);

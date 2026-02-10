@@ -1,23 +1,23 @@
-# 测试指南 (TESTING.md)
+# Testing Guide (TESTING.md)
 
-本文档提供完整的测试步骤，确保机器人各功能正常工作。
+This document provides complete testing steps to ensure all bot functions are working correctly.
 
 ---
 
-## 1. 环境检查
+## 1. Environment Check
 
-### 1.1 检查 Node.js 版本
+### 1.1 Check Node.js Version
 ```bash
 node --version
-# 应该显示 v18.x.x 或更高
+# Should display v18.x.x or higher
 ```
 
-### 1.2 检查依赖安装
+### 1.2 Check Dependency Installation
 ```bash
 npm list --depth=0
 ```
 
-应该显示：
+Should display:
 - alchemy-sdk
 - better-sqlite3
 - discord.js
@@ -25,12 +25,12 @@ npm list --depth=0
 - node-cache
 - node-cron
 
-### 1.3 检查环境变量
+### 1.3 Check Environment Variables
 ```bash
 # Windows PowerShell
 Get-Content .env
 
-# 或手动检查 .env 文件包含：
+# Or manually check .env file contains:
 # - DISCORD_TOKEN
 # - DISCORD_CLIENT_ID
 # - ALCHEMY_API_KEY
@@ -38,14 +38,14 @@ Get-Content .env
 
 ---
 
-## 2. 启动测试
+## 2. Startup Test
 
-### 2.1 启动机器人
+### 2.1 Start Bot
 ```bash
 npm start
 ```
 
-### 2.2 预期输出
+### 2.2 Expected Output
 ```
 ✅ Configuration validated successfully
 ✅ Database initialized: ./data.db
@@ -58,244 +58,244 @@ npm start
 🚀 Bot is ready!
 ```
 
-### 2.3 检查数据库文件
-启动后应该在项目目录生成 `data.db` 文件。
+### 2.3 Check Database File
+After startup, `data.db` file should be generated in the project directory.
 
 ---
 
-## 3. 命令测试
+## 3. Command Testing
 
-### 3.1 /help 命令
-**测试步骤：**
-1. 在 Discord 服务器输入 `/help`
-2. 按回车执行
+### 3.1 /help Command
+**Test Steps:**
+1. Type `/help` in Discord server
+2. Press Enter to execute
 
-**预期结果：**
-- 显示帮助文档 Embed
-- 包含 5 个命令说明
-- 包含积分规则
-- 消息为私密（只有你能看到）
-
----
-
-### 3.2 /setup 命令（管理员）
-**测试步骤：**
-1. 确保你有管理员权限
-2. 输入 `/setup`
-3. 填写参数：
-   - `contract_address`: 有效的 NFT 合约地址（如 `0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D`）
-   - `verified_role`: 选择一个角色
-   - `required_amount`: 1（可选）
-   - `activity_enabled`: True（可选）
-   - `leaderboard_channel`: 选择频道（可选）
-
-**预期结果：**
-- 显示绿色成功 Embed
-- 显示配置的合约地址、角色、数量等信息
-
-**错误测试：**
-- 输入无效合约地址（如 `abc123`）
-- 应该显示「无效的钱包地址」错误
+**Expected Results:**
+- Display help document Embed
+- Contains 5 command descriptions
+- Contains scoring rules
+- Message is ephemeral (only you can see it)
 
 ---
 
-### 3.3 /verify 命令
-**测试步骤：**
-1. 输入 `/verify`
-2. 弹出模态框，输入钱包地址
+### 3.2 /setup Command (Administrator)
+**Test Steps:**
+1. Ensure you have administrator permissions
+2. Type `/setup`
+3. Fill in parameters:
+   - `contract_address`: Valid NFT contract address (e.g. `0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D`)
+   - `verified_role`: Select a role
+   - `required_amount`: 1 (optional)
+   - `activity_enabled`: True (optional)
+   - `leaderboard_channel`: Select a channel (optional)
 
-**测试场景 A - 成功验证：**
-- 输入持有该 NFT 的钱包地址
-- 预期：显示成功消息，自动分配角色
+**Expected Results:**
+- Display green success Embed
+- Display configured contract address, role, amount, etc.
 
-**测试场景 B - 验证失败：**
-- 输入不持有 NFT 的钱包地址（如 `0x0000000000000000000000000000000000000000`）
-- 预期：显示「未找到 NFT」错误
-
-**测试场景 C - 无效地址：**
-- 输入格式错误的地址（如 `not_a_wallet`）
-- 预期：显示「无效的钱包地址」错误
-
----
-
-### 3.4 /my-activity 命令
-**测试步骤：**
-1. 输入 `/my-activity`
-
-**场景 A - 有活跃度数据：**
-- 先在服务器发送几条消息
-- 等待 30 秒（批量处理间隔）
-- 执行命令
-- 预期：显示消息数、积分、排名
-
-**场景 B - 无数据：**
-- 在新服务器或新用户执行
-- 预期：显示「您还没有活跃度记录」
+**Error Testing:**
+- Enter invalid contract address (e.g. `abc123`)
+- Should display "Invalid wallet address" error
 
 ---
 
-### 3.5 /leaderboard 命令
-**测试步骤：**
-1. 输入 `/leaderboard`
+### 3.3 /verify Command
+**Test Steps:**
+1. Type `/verify`
+2. Modal pops up, enter wallet address
 
-**预期结果：**
-- 显示本周活跃度排行榜
-- 包含前 10 名用户
-- 显示奖牌图标（金银铜）
-- 显示各用户的消息数、回复数、语音时长
+**Test Scenario A - Successful Verification:**
+- Enter a wallet address that holds the NFT
+- Expected: Display success message, automatically assign role
 
----
+**Test Scenario B - Verification Failed:**
+- Enter a wallet address that does not hold the NFT (e.g. `0x0000000000000000000000000000000000000000`)
+- Expected: Display "NFT not found" error
 
-## 4. 活跃度追踪测试
-
-### 4.1 消息追踪
-1. 发送一条消息（至少 3 个字符）
-2. 等待 30 秒
-3. 执行 `/my-activity`
-4. 检查消息数是否增加
-
-### 4.2 回复追踪
-1. 回复他人的消息
-2. 等待 30 秒
-3. 执行 `/my-activity`
-4. 检查回复数是否增加
-
-### 4.3 反应追踪
-1. 对他人的消息添加表情反应
-2. 等待 30 秒
-3. 执行 `/my-activity`
-4. 检查反应数是否增加
-
-### 4.4 语音追踪
-1. 加入语音频道
-2. 停留至少 1 分钟
-3. 离开语音频道
-4. 执行 `/my-activity`
-5. 检查语音时长是否增加
-
-### 4.5 防垃圾测试
-1. 快速连续发送多条消息（10秒内）
-2. 只有第一条应该计分
-3. 等待 10 秒后再发一条
-4. 这条应该计分
+**Test Scenario C - Invalid Address:**
+- Enter a malformed address (e.g. `not_a_wallet`)
+- Expected: Display "Invalid wallet address" error
 
 ---
 
-## 5. 命令冷却测试
+### 3.4 /my-activity Command
+**Test Steps:**
+1. Type `/my-activity`
 
-**测试步骤：**
-1. 执行任意命令（如 `/help`）
-2. 立即再次执行另一个命令
-3. 应该显示「请等待 X 秒后再使用命令」
-4. 等待 5 秒后再试
-5. 命令应该正常执行
+**Scenario A - With Activity Data:**
+- Send a few messages in the server first
+- Wait 30 seconds (batch processing interval)
+- Execute command
+- Expected: Display message count, points, rank
 
----
-
-## 6. 新成员验证测试
-
-**测试步骤：**
-1. 使用小号加入服务器
-2. 应该收到机器人的私信
-3. 私信包含「验证 NFT 所有权」按钮
-4. 点击按钮，输入钱包地址
-5. 根据 NFT 持有情况显示成功或失败
+**Scenario B - No Data:**
+- Execute in new server or as new user
+- Expected: Display "No activity records yet"
 
 ---
 
-## 7. 重新验证测试
+### 3.5 /leaderboard Command
+**Test Steps:**
+1. Type `/leaderboard`
 
-**说明：** 机器人每小时检查一次过期验证（24小时未检查）。
-
-**手动测试方法：**
-1. 完成一次验证
-2. 手动修改数据库中的 `last_checked` 时间为 25 小时前
-3. 等待整点触发检查
-4. 或重启机器人等待首次检查
+**Expected Results:**
+- Display this week's activity leaderboard
+- Includes top 10 users
+- Display medal icons (gold, silver, bronze)
+- Display message count, reply count, voice duration for each user
 
 ---
 
-## 8. 数据库验证
+## 4. Activity Tracking Test
 
-### 8.1 检查表结构
+### 4.1 Message Tracking
+1. Send a message (at least 3 characters)
+2. Wait 30 seconds
+3. Execute `/my-activity`
+4. Check if message count increased
+
+### 4.2 Reply Tracking
+1. Reply to someone's message
+2. Wait 30 seconds
+3. Execute `/my-activity`
+4. Check if reply count increased
+
+### 4.3 Reaction Tracking
+1. Add an emoji reaction to someone's message
+2. Wait 30 seconds
+3. Execute `/my-activity`
+4. Check if reaction count increased
+
+### 4.4 Voice Tracking
+1. Join a voice channel
+2. Stay for at least 1 minute
+3. Leave the voice channel
+4. Execute `/my-activity`
+5. Check if voice duration increased
+
+### 4.5 Anti-Spam Test
+1. Send multiple messages in rapid succession (within 10 seconds)
+2. Only the first one should be scored
+3. Wait 10 seconds and send another one
+4. This one should be scored
+
+---
+
+## 5. Command Cooldown Test
+
+**Test Steps:**
+1. Execute any command (e.g. `/help`)
+2. Execute another command immediately
+3. Should display "Please wait X seconds before using command again"
+4. Wait 5 seconds and try again
+5. Command should execute normally
+
+---
+
+## 6. New Member Verification Test
+
+**Test Steps:**
+1. Join the server with an alt account
+2. Should receive a DM from the bot
+3. DM contains a "Verify NFT Ownership" button
+4. Click the button, enter wallet address
+5. Display success or failure based on NFT holdings
+
+---
+
+## 7. Re-verification Test
+
+**Description:** The bot checks for expired verifications every hour (not checked for 24 hours).
+
+**Manual Test Method:**
+1. Complete a verification
+2. Manually modify the `last_checked` time in the database to 25 hours ago
+3. Wait for the hourly check to trigger
+4. Or restart the bot and wait for the initial check
+
+---
+
+## 8. Database Verification
+
+### 8.1 Check Table Structure
 ```bash
-# 使用 SQLite 命令行工具
+# Using SQLite command line tool
 sqlite3 data.db ".tables"
-# 应该显示：activity_tracking  communities  verified_users
+# Should display: activity_tracking  communities  verified_users
 ```
 
-### 8.2 检查社区配置
+### 8.2 Check Community Configuration
 ```bash
 sqlite3 data.db "SELECT * FROM communities;"
 ```
 
-### 8.3 检查已验证用户
+### 8.3 Check Verified Users
 ```bash
 sqlite3 data.db "SELECT * FROM verified_users;"
 ```
 
-### 8.4 检查活跃度数据
+### 8.4 Check Activity Data
 ```bash
 sqlite3 data.db "SELECT * FROM activity_tracking ORDER BY total_score DESC LIMIT 10;"
 ```
 
 ---
 
-## 9. 错误处理测试
+## 9. Error Handling Test
 
-### 9.1 Alchemy API 错误
-- 使用无效的 API Key
-- 预期：显示 API 错误消息
+### 9.1 Alchemy API Error
+- Use an invalid API Key
+- Expected: Display API error message
 
-### 9.2 数据库错误
-- 删除 data.db 文件
-- 重启机器人
-- 预期：自动重新创建数据库
+### 9.2 Database Error
+- Delete data.db file
+- Restart the bot
+- Expected: Automatically recreate the database
 
-### 9.3 Discord API 错误
-- 使用无效的 Token
-- 预期：启动时显示登录失败错误
-
----
-
-## 10. 性能测试
-
-### 10.1 批量活跃度处理
-1. 在多个频道快速发送消息
-2. 检查控制台日志
-3. 应该显示「Processed X activity events」
-
-### 10.2 缓存效率
-1. 同一钱包连续验证两次
-2. 第二次应该使用缓存（控制台显示 "Using cached NFT balance"）
+### 9.3 Discord API Error
+- Use an invalid Token
+- Expected: Display login failure error on startup
 
 ---
 
-## 测试清单总结
+## 10. Performance Test
 
-- [ ] 环境检查通过
-- [ ] 机器人成功启动
-- [ ] /help 命令正常
-- [ ] /setup 命令正常（管理员）
-- [ ] /verify 命令正常
-- [ ] /my-activity 命令正常
-- [ ] /leaderboard 命令正常
-- [ ] 消息活跃度追踪正常
-- [ ] 回复活跃度追踪正常
-- [ ] 反应活跃度追踪正常
-- [ ] 语音活跃度追踪正常
-- [ ] 命令冷却正常（5秒）
-- [ ] 新成员自动发送验证私信
-- [ ] 错误消息友好
+### 10.1 Batch Activity Processing
+1. Send messages rapidly in multiple channels
+2. Check console logs
+3. Should display "Processed X activity events"
+
+### 10.2 Cache Efficiency
+1. Verify the same wallet twice in a row
+2. Second time should use cache (console shows "Using cached NFT balance")
 
 ---
 
-## 常见问题排查
+## Test Checklist Summary
 
-| 问题 | 可能原因 | 解决方法 |
+- [ ] Environment check passed
+- [ ] Bot started successfully
+- [ ] /help command normal
+- [ ] /setup command normal (Administrator)
+- [ ] /verify command normal
+- [ ] /my-activity command normal
+- [ ] /leaderboard command normal
+- [ ] Message activity tracking normal
+- [ ] Reply activity tracking normal
+- [ ] Reaction activity tracking normal
+- [ ] Voice activity tracking normal
+- [ ] Command cooldown normal (5 seconds)
+- [ ] New members automatically sent verification DM
+- [ ] Error messages are friendly
+
+---
+
+## Troubleshooting
+
+| Problem | Possible Cause | Solution |
 |------|----------|----------|
-| 命令不显示 | Discord 缓存 | 等待几分钟或重新邀请机器人 |
-| 数据库错误 | better-sqlite3 未正确安装 | 运行 `npm rebuild better-sqlite3` |
-| NFT 验证超时 | Alchemy API 问题 | 检查 API Key，稍后重试 |
-| 活跃度不更新 | 批量间隔未到 | 等待 30 秒后检查 |
-| 私信发送失败 | 用户隐私设置 | 用户需开启服务器成员私信 |
+| Commands not showing | Discord cache | Wait a few minutes or re-invite the bot |
+| Database error | better-sqlite3 not installed correctly | Run `npm rebuild better-sqlite3` |
+| NFT verification timeout | Alchemy API problem | Check API Key, try again later |
+| Activity not updating | Batch interval not reached | Wait 30 seconds and check |
+| DM sending failed | User privacy settings | User needs to enable server member DMs |

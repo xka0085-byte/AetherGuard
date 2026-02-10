@@ -1,57 +1,57 @@
 /**
- * 文件名：activityTracker.js
- * 用途：活跃度追踪模块（简化版 - 无 Redis）
+ * Filename: activityTracker.js
+ * Purpose: Activity tracking module (simplified version - no Redis)
  *
- * 测试方法：
- * 1. 启动机器人
- * 2. 在已配置的服务器发送消息
- * 3. 运行 /my-activity 应显示积分
+ * Test Method:
+ * 1. Start bot
+ * 2. Send messages in a configured guild
+ * 3. Run /my-activity should show points
  *
- * 改动说明：
- * - 删除 Redis 队列支持（只使用内存队列）
- * - 删除 flagUser 函数（不再需要反滥用）
- * - 简化 isTrackingEnabled 检查
- * - 从 407 行简化为 ~250 行
+ * Change Notes:
+ * - Removed Redis queue support (uses memory queue only)
+ * - Removed flagUser function (no longer need anti-abuse)
+ * - Simplified isTrackingEnabled check
+ * - Simplified from 407 lines to ~250 lines
  */
 
 const config = require('../config');
 const db = require('../database/db');
 
-// 内存队列用于活跃度事件
+// Memory queue for activity events
 let activityQueue = [];
 
-// 追踪最近消息用于冷却（userId -> timestamp）
+// Track recent messages for cooldown (userId -> timestamp)
 const recentMessages = new Map();
 
-// 追踪消息数量用于垃圾检测（userId -> { count, windowStart }）
+// Track message count for spam detection (userId -> { count, windowStart })
 const spamTracker = new Map();
 
-// 追踪语音会话开始时间（guildId_userId -> timestamp）
+// Track voice session start time (guildId_userId -> timestamp)
 const voiceSessions = new Map();
 
-// ========== 功能2：重复消息检测 ==========
-// 追踪用户最近10条消息（userId -> Array<string>）
+// ========== Feature 2: Duplicate Message Detection ==========
+// Track user's last 10 messages (userId -> Array<string>)
 const userMessageHistory = new Map();
 const MESSAGE_HISTORY_SIZE = 10;
-const SIMILARITY_THRESHOLD = 0.8; // 相似度阈值（80%）
+const SIMILARITY_THRESHOLD = 0.8; // Similarity threshold (80%)
 
 /**
- * 初始化活跃度追踪器
+ * Initialize activity tracker
  */
 function initActivityTracker() {
-  // 启动批量处理定时器
+  // Start batch processing timer
   setInterval(processBatch, config.activity.queue.processInterval);
 
-  // 启动清理定时器（每小时清理一次过期数据）
+  // Start cleanup timer (clean up expired data every hour)
   setInterval(cleanupTrackingData, 3600000);
 
   console.log(`✅ Activity tracker initialized (batch interval: ${config.activity.queue.processInterval}ms)`);
 }
 
 /**
- * 检查服务器是否启用了活跃度追踪
- * @param {string} guildId - 服务器ID
- * @returns {Promise<Object|null>} 返回活跃度设置或null
+ * Check if activity tracking is enabled for the guild
+ * @param {string} guildId - Guild ID
+ * @returns {Promise<Object|null>} Returns activity settings or null
  */
 async function getActivitySettingsIfEnabled(guildId) {
   if (!config.activity.enabled) return null;
@@ -63,29 +63,29 @@ async function getActivitySettingsIfEnabled(guildId) {
 }
 
 /**
- * 检查频道是否在追踪范围内
- * @param {string} guildId - 服务器ID
- * @param {string} channelId - 频道ID
- * @param {Object} settings - 活跃度设置
+ * Check if the channel is within the tracking scope
+ * @param {string} guildId - Guild ID
+ * @param {string} channelId - Channel ID
+ * @param {Object} settings - Activity settings
  * @returns {boolean}
  */
 function isChannelTracked(channelId, settings) {
-  if (!settings.tracking_channels) return true; // 未设置则追踪所有频道
+  if (!settings.tracking_channels) return true; // If not set, track all channels
 
   try {
     const trackedChannels = JSON.parse(settings.tracking_channels);
     return trackedChannels.includes(channelId);
   } catch {
-    return true; // 解析失败则追踪所有频道
+    return true; // If parsing fails, track all channels
   }
 }
 
 /**
- * 记录活跃度事件
- * @param {string} guildId - 服务器ID
- * @param {string} userId - 用户ID
- * @param {string} type - 事件类型: 'message', 'reply', 'reaction', 'voice'
- * @param {number} value - 值（默认: 1）
+ * Record activity event
+ * @param {string} guildId - Guild ID
+ * @param {string} userId - User ID
+ * @param {string} type - Event type: 'message', 'reply', 'reaction', 'voice'
+ * @param {number} value - Value (default: 1)
  */
 function trackActivity(guildId, userId, type, value = 1) {
   activityQueue.push({
@@ -98,49 +98,49 @@ function trackActivity(guildId, userId, type, value = 1) {
 }
 
 /**
- * 计算两个字符串的相似度（Jaccard相似度）
- * @param {string} str1 - 字符串1
- * @param {string} str2 - 字符串2
- * @returns {number} 相似度 (0-1)
+ * Calculate similarity between two strings (Jaccard similarity)
+ * @param {string} str1 - String 1
+ * @param {string} str2 - String 2
+ * @returns {number} Similarity (0-1)
  */
 function calculateSimilarity(str1, str2) {
   if (!str1 || !str2) return 0;
 
-  // 转为小写并分词
+  // Convert to lowercase and tokenize
   const words1 = new Set(str1.toLowerCase().split(/\s+/));
   const words2 = new Set(str2.toLowerCase().split(/\s+/));
 
-  // 计算交集
+  // Calculate intersection
   const intersection = new Set([...words1].filter(x => words2.has(x)));
-  // 计算并集
+  // Calculate union
   const union = new Set([...words1, ...words2]);
 
   return union.size > 0 ? intersection.size / union.size : 0;
 }
 
 /**
- * 检查消息是否与最近消息重复
- * @param {string} userId - 用户ID
- * @param {string} content - 消息内容
- * @returns {boolean} 是否重复
+ * Check if the message is a duplicate of recent messages
+ * @param {string} userId - User ID
+ * @param {string} content - Message content
+ * @returns {boolean} Whether it's a duplicate
  */
 function isDuplicateMessage(userId, content) {
   if (!content || content.length < 5) return false;
 
   const history = userMessageHistory.get(userId) || [];
 
-  // 检查是否与最近消息相似
+  // Check if similar to recent messages
   for (const prevMsg of history) {
     const similarity = calculateSimilarity(content, prevMsg);
     if (similarity >= SIMILARITY_THRESHOLD) {
-      return true; // 重复消息
+      return true; // Duplicate message
     }
   }
 
-  // 添加到历史记录
+  // Add to history
   history.push(content);
   if (history.length > MESSAGE_HISTORY_SIZE) {
-    history.shift(); // 保持最近10条
+    history.shift(); // Keep the last 10
   }
   userMessageHistory.set(userId, history);
 
@@ -148,31 +148,31 @@ function isDuplicateMessage(userId, content) {
 }
 
 /**
- * 检查消息是否应该计分（防垃圾）
- * @param {string} userId - 用户ID
- * @param {string} content - 消息内容
+ * Check if the message should be scored (spam prevention)
+ * @param {string} userId - User ID
+ * @param {string} content - Message content
  * @returns {boolean}
  */
 function shouldScoreMessage(userId, content) {
   const now = Date.now();
 
-  // 检查消息长度
+  // Check message length
   if (content.length < config.activity.minMessageLength) {
     return false;
   }
 
-  // 功能2：检查重复消息
+  // Feature 2: Check for duplicate messages
   if (isDuplicateMessage(userId, content)) {
     return false;
   }
 
-  // 检查冷却（10秒内不重复计分）
+  // Check cooldown (no duplicate scoring within 10 seconds)
   const lastTime = recentMessages.get(userId);
   if (lastTime && now - lastTime < config.activity.cooldownMs) {
     return false;
   }
 
-  // 检查垃圾阈值（每分钟50条消息）
+  // Check spam threshold (50 messages per minute)
   const spamData = spamTracker.get(userId);
   if (spamData) {
     if (now - spamData.windowStart < 60000) {
@@ -187,34 +187,34 @@ function shouldScoreMessage(userId, content) {
     spamTracker.set(userId, { count: 1, windowStart: now });
   }
 
-  // 更新最后消息时间
+  // Update last message time
   recentMessages.set(userId, now);
 
   return true;
 }
 
 /**
- * 处理消息创建事件
- * @param {Message} message - Discord 消息对象
+ * Handle message create event
+ * @param {Message} message - Discord message object
  */
 async function handleMessage(message) {
-  // 忽略机器人
+  // Ignore bots
   if (message.author.bot) return;
 
-  // 检查是否启用追踪
+  // Check if tracking is enabled
   const settings = await getActivitySettingsIfEnabled(message.guild.id);
   if (!settings) return;
 
-  // 检查频道是否在追踪范围内
+  // Check if the channel is within tracking scope
   if (!isChannelTracked(message.channel.id, settings)) return;
 
-  // 检查防垃圾
+  // Check spam prevention
   if (!shouldScoreMessage(message.author.id, message.content)) return;
 
-  // 追踪消息
+  // Track message
   trackActivity(message.guild.id, message.author.id, 'message', 1);
 
-  // 追踪回复（如果回复的是其他人）
+  // Track reply (if replying to someone else)
   if (message.reference && message.reference.messageId) {
     try {
       const repliedMessage = await message.channel.messages.fetch(message.reference.messageId);
@@ -222,14 +222,14 @@ async function handleMessage(message) {
         trackActivity(message.guild.id, message.author.id, 'reply', 1);
       }
     } catch (error) {
-      // 无法获取原消息，仍然计为普通消息
+      // Failed to get original message, still count as normal message
     }
   }
 }
 
 /**
- * 处理消息删除事件（减少积分）
- * @param {Message} message - Discord 消息对象
+ * Handle message delete event (decrement points)
+ * @param {Message} message - Discord message object
  */
 async function handleMessageDelete(message) {
   if (message.author?.bot) return;
@@ -238,19 +238,19 @@ async function handleMessageDelete(message) {
   const settings = await getActivitySettingsIfEnabled(message.guild.id);
   if (!settings) return;
 
-  // 减少活跃度
+  // Decrement activity
   await db.decrementActivity(message.guild.id, message.author.id, 'message', 1);
 
-  // 如果是回复，也减少回复积分
+  // If it's a reply, also decrement reply points
   if (message.reference) {
     await db.decrementActivity(message.guild.id, message.author.id, 'reply', 1);
   }
 }
 
 /**
- * 处理表情反应添加事件
- * @param {MessageReaction} reaction - Discord 反应对象
- * @param {User} user - 添加反应的用户
+ * Handle emoji reaction add event
+ * @param {MessageReaction} reaction - Discord reaction object
+ * @param {User} user - User who added the reaction
  */
 async function handleReactionAdd(reaction, user) {
   if (user.bot) return;
@@ -259,19 +259,19 @@ async function handleReactionAdd(reaction, user) {
   const settings = await getActivitySettingsIfEnabled(reaction.message.guild.id);
   if (!settings) return;
 
-  // 检查频道是否在追踪范围内
+  // Check if the channel is within tracking scope
   if (!isChannelTracked(reaction.message.channel.id, settings)) return;
 
-  // 不计算自己消息上的反应
+  // Don't count reactions on own messages
   if (reaction.message.author?.id === user.id) return;
 
   trackActivity(reaction.message.guild.id, user.id, 'reaction', 1);
 }
 
 /**
- * 处理语音状态更新事件
- * @param {VoiceState} oldState - 之前的语音状态
- * @param {VoiceState} newState - 新的语音状态
+ * Handle voice state update event
+ * @param {VoiceState} oldState - Previous voice state
+ * @param {VoiceState} newState - New voice state
  */
 async function handleVoiceStateUpdate(oldState, newState) {
   const userId = newState.member?.id || oldState.member?.id;
@@ -285,12 +285,12 @@ async function handleVoiceStateUpdate(oldState, newState) {
 
   const sessionKey = `${guildId}_${userId}`;
 
-  // 用户加入语音频道
+  // User joins voice channel
   if (!oldState.channel && newState.channel) {
     voiceSessions.set(sessionKey, Date.now());
   }
 
-  // 用户离开语音频道
+  // User leaves voice channel
   if (oldState.channel && !newState.channel) {
     const joinTime = voiceSessions.get(sessionKey);
     if (joinTime) {
@@ -304,17 +304,17 @@ async function handleVoiceStateUpdate(oldState, newState) {
 }
 
 /**
- * 批量处理队列中的事件
+ * Batch process events in the queue
  */
 async function processBatch() {
-  // 获取并清空队列
+  // Get and clear the queue
   const events = activityQueue.splice(0);
 
   if (events.length === 0) return;
 
-  // 按服务器/用户聚合事件
+  // Aggregate events by guild/user
   const aggregated = {};
-  const guildSettings = {}; // 缓存服务器设置
+  const guildSettings = {}; // Cache guild settings
 
   for (const event of events) {
     const key = `${event.guildId}_${event.userId}`;
@@ -330,7 +330,7 @@ async function processBatch() {
       };
     }
 
-    // 缓存服务器设置
+    // Cache guild settings
     if (!guildSettings[event.guildId]) {
       guildSettings[event.guildId] = await db.getActivitySettings(event.guildId);
     }
@@ -351,7 +351,7 @@ async function processBatch() {
     }
   }
 
-  // 按服务器分组处理，使用各自的自定义分数
+  // Group by guild for processing, using respective custom scores
   const guildGroups = {};
   for (const data of Object.values(aggregated)) {
     if (!guildGroups[data.guildId]) {
@@ -360,7 +360,7 @@ async function processBatch() {
     guildGroups[data.guildId].push(data);
   }
 
-  // 批量写入数据库（使用自定义分数）
+  // Batch write to database (using custom scores)
   try {
     for (const [guildId, updates] of Object.entries(guildGroups)) {
       const settings = guildSettings[guildId];
@@ -369,34 +369,34 @@ async function processBatch() {
     console.log(`✅ Processed ${events.length} activity events`);
   } catch (error) {
     console.error('❌ Failed to update activity:', error.message);
-    // 失败时将事件放回队列
+    // Put events back into queue on failure
     activityQueue.push(...events);
   }
 }
 
 /**
- * 清理过期的追踪数据
+ * Clean up expired tracking data
  */
 function cleanupTrackingData() {
   const now = Date.now();
-  const maxAge = 3600000; // 1 小时
+  const maxAge = 3600000; // 1 hour
 
-  // 清理最近消息
+  // Clean up recent messages
   for (const [userId, timestamp] of recentMessages.entries()) {
     if (now - timestamp > maxAge) {
       recentMessages.delete(userId);
     }
   }
 
-  // 清理垃圾追踪器
+  // Clean up spam tracker
   for (const [userId, data] of spamTracker.entries()) {
     if (now - data.windowStart > maxAge) {
       spamTracker.delete(userId);
     }
   }
 
-  // 清理消息历史（功能2：重复消息检测）
-  // 只保留活跃用户的历史
+  // Clean up message history (Feature 2: Duplicate message detection)
+  // Only keep history of active users
   for (const [userId] of userMessageHistory.entries()) {
     const lastActive = recentMessages.get(userId);
     if (!lastActive || now - lastActive > maxAge) {
@@ -408,7 +408,7 @@ function cleanupTrackingData() {
 }
 
 /**
- * 获取队列统计信息
+ * Get queue statistical information
  */
 function getQueueStats() {
   return {
