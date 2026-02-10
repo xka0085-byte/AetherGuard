@@ -87,8 +87,8 @@ Follow these steps in order to deploy and configure the bot.
 
 ```bash
 # Clone or download the project
-git clone <your-repo-url>
-cd discord-nft-bot
+git clone https://github.com/xka0085-byte/AetherGuard.git
+cd AetherGuard
 
 # Install dependencies
 npm install

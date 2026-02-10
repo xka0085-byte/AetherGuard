@@ -50,9 +50,9 @@ async function testNftMultiplier(guildId, userId, settings) {
 }
 
 (async () => {
-  const settings = await dbGet('SELECT * FROM activity_settings WHERE guild_id = ?', ['1467808061279436907']);
+  const settings = await dbGet('SELECT * FROM activity_settings WHERE guild_id = ?', ['YOUR_GUILD_ID']);
   console.log('Settings nft_bonus_enabled:', settings.nft_bonus_enabled, '\n');
 
-  const multiplier = await testNftMultiplier('1467808061279436907', '1424921106279567460', settings);
+  const multiplier = await testNftMultiplier('YOUR_GUILD_ID', 'YOUR_USER_ID', settings);
   console.log('\n✅ Final multiplier:', multiplier);
 })();
