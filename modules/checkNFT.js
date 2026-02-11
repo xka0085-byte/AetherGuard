@@ -1,6 +1,6 @@
 /**
  * Filename: checkNFT.js
- * Purpose: NFT verification module (multi-chain support - Ethereum, Polygon, Base)
+ * Purpose: NFT verification module (multi-chain support)
  *
  * Test Method:
  * 1. Get a wallet address known to hold an NFT
@@ -11,6 +11,8 @@
  * - Ethereum Mainnet
  * - Polygon (MATIC)
  * - Base (Coinbase L2)
+ * - Arbitrum (L2)
+ * - Optimism (L2)
  */
 
 const { Alchemy, Network } = require('alchemy-sdk');
@@ -25,6 +27,8 @@ const NETWORK_MAP = {
   'ethereum': Network.ETH_MAINNET,
   'polygon': Network.MATIC_MAINNET,
   'base': Network.BASE_MAINNET,
+  'arbitrum': Network.ARB_MAINNET,
+  'optimism': Network.OPT_MAINNET,
 };
 
 // Create Alchemy instance for each chain

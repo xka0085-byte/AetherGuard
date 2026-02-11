@@ -242,7 +242,9 @@ const commands = [
                 .addChoices(
                     { name: '⟠ Ethereum Mainnet', value: 'ethereum' },
                     { name: '🟣 Polygon (MATIC)', value: 'polygon' },
-                    { name: '🔵 Base (Coinbase L2)', value: 'base' }
+                    { name: '🔵 Base (Coinbase L2)', value: 'base' },
+                    { name: '🔶 Arbitrum (L2)', value: 'arbitrum' },
+                    { name: '🔴 Optimism (L2)', value: 'optimism' }
                 ))
         .addRoleOption(option =>
             option.setName('role')
@@ -425,7 +427,9 @@ const commands = [
                 .addChoices(
                     { name: '🟣 Polygon (recommended, low gas)', value: 'polygon' },
                     { name: '⟠ Ethereum', value: 'ethereum' },
-                    { name: '🔵 Base', value: 'base' }
+                    { name: '🔵 Base', value: 'base' },
+                    { name: '🔶 Arbitrum', value: 'arbitrum' },
+                    { name: '🔴 Optimism', value: 'optimism' }
                 ))
         .addStringOption(option =>
             option.setName('tx')
