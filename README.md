@@ -16,6 +16,15 @@ A multi-chain Discord bot for NFT ownership verification, activity tracking, lea
 - **New Member Welcome** - Automatically DMs new members with verification instructions
 - **Feedback System** - Users can submit bug reports and feature requests
 
+### Anti-Sybil & Anti-Farming Protection
+
+- **Gibberish Detection** - Filters out low-quality messages (keyboard mashing, excessive repetition, special character spam)
+- **Voice AFK Detection** - Muted+deafened users get 0 credit, single mute/deafen gets 50%, 4-hour session cap
+- **Reaction Pattern Analysis** - Limits reactions to 30 per 5 minutes, detects mass-reacting to same messages
+- **Activity Anomaly Detection** - Flags users with sudden activity spikes (5x their 7-day average)
+- **Cross-Guild Sybil Detection** - Flags wallets verified in 10+ guilds
+- **Progressive Penalty System** - 1 flag = warning, 2 flags = 50% score, 3+ flags = blocked from scoring
+
 ## Tech Stack
 
 - **Discord.js** v14

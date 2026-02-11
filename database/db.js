@@ -986,6 +986,23 @@ module.exports = {
   getExpiredVerifications,
   updateLastChecked,
 
+  // Cross-guild Sybil detection
+  getWalletGuildCount: async function (walletAddress) {
+    const walletHash = hashWallet(walletAddress);
+    const row = await dbGet(
+      'SELECT COUNT(DISTINCT guild_id) AS total FROM verified_users WHERE wallet_hash = ?',
+      [walletHash]
+    );
+    return row?.total || 0;
+  },
+  getWalletGuilds: async function (walletAddress) {
+    const walletHash = hashWallet(walletAddress);
+    return dbAll(
+      'SELECT guild_id, user_id, verified_at FROM verified_users WHERE wallet_hash = ?',
+      [walletHash]
+    );
+  },
+
   // Activity Tracking
   getUserActivity,
   getLeaderboard,

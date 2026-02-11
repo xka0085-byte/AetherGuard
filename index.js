@@ -867,6 +867,21 @@ async function handleVerify(interaction) {
             });
         }
 
+        // Cross-guild Sybil detection: warn if wallet is used in many guilds
+        const walletGuildCount = await db.getWalletGuildCount(wallet);
+        if (walletGuildCount >= 10) {
+            securityLogger.logSecurityEvent(securityLogger.SECURITY_EVENTS.CROSS_GUILD_SYBIL, {
+                guildId,
+                userId,
+                userTag: interaction.user.tag,
+                details: {
+                    walletGuildCount,
+                    reason: 'Wallet verified in 10+ guilds'
+                }
+            });
+            securityLogger.flagUser(guildId, userId, 'cross_guild_sybil');
+        }
+
         // Free version verification limit check
         const isPro = await canUsePro(guildId);
         if (!isPro) {
@@ -1606,6 +1621,9 @@ client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     if (!message.guild) return;
 
+    // Progressive penalty: skip scoring for blocked users
+    if (securityLogger.isUserBlocked(message.guild.id, message.author.id)) return;
+
     // Use module function to handle message
     await activityTrackerModule.handleMessage(message);
 });
@@ -1614,6 +1632,9 @@ client.on('messageCreate', async (message) => {
 client.on('messageReactionAdd', async (reaction, user) => {
     if (user.bot) return;
     if (!reaction.message.guild) return;
+
+    // Progressive penalty: skip scoring for blocked users
+    if (securityLogger.isUserBlocked(reaction.message.guild.id, user.id)) return;
 
     // Use module function to handle reaction
     await activityTrackerModule.handleReactionAdd(reaction, user);

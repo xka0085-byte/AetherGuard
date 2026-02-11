@@ -16,6 +16,7 @@
 
 const config = require('../config');
 const db = require('../database/db');
+const securityLogger = require('../utils/securityLogger');
 
 // Memory queue for activity events
 let activityQueue = [];
@@ -26,7 +27,7 @@ const recentMessages = new Map();
 // Track message count for spam detection (userId -> { count, windowStart })
 const spamTracker = new Map();
 
-// Track voice session start time (guildId_userId -> timestamp)
+// Track voice session start time (guildId_userId -> { joinTime, muted, deafened })
 const voiceSessions = new Map();
 
 // ========== Feature 2: Duplicate Message Detection ==========
@@ -34,6 +35,19 @@ const voiceSessions = new Map();
 const userMessageHistory = new Map();
 const MESSAGE_HISTORY_SIZE = 10;
 const SIMILARITY_THRESHOLD = 0.8; // Similarity threshold (80%)
+
+// ========== Anti-Farming: Reaction Pattern Tracking ==========
+// Track reaction counts per user per window (userId -> { count, windowStart, uniqueMessages })
+const reactionTracker = new Map();
+const REACTION_WINDOW_MS = 300000; // 5-minute window
+const REACTION_MAX_PER_WINDOW = 30; // Max 30 reactions per 5 minutes
+const REACTION_UNIQUE_RATIO = 0.3; // At least 30% unique messages
+
+// ========== Anti-Farming: Activity Anomaly Detection ==========
+// Track daily activity baseline (userId -> { history: [{ date, score }], avgScore })
+const activityBaseline = new Map();
+const ANOMALY_MULTIPLIER = 5; // Flag if daily score > 5x average
+const BASELINE_DAYS = 7; // Track last 7 days for baseline
 
 /**
  * Initialize activity tracker
@@ -148,6 +162,53 @@ function isDuplicateMessage(userId, content) {
 }
 
 /**
+ * Detect gibberish/low-quality content
+ * Checks for random characters, keyboard mashing, excessive repetition
+ * @param {string} content - Message content
+ * @returns {boolean} Whether the message is gibberish
+ */
+function isGibberish(content) {
+  if (!content || content.length < 5) return false;
+
+  const text = content.trim();
+
+  // Allow URLs, mentions, emojis (these are valid short messages)
+  if (/^(<[@#!&]|https?:\/\/|<:\w+:\d+>)/.test(text)) return false;
+
+  // Check 1: Excessive single-character repetition (e.g., "aaaaaaa", "1111111")
+  if (/(.)\1{6,}/.test(text)) return true;
+
+  // Check 2: Random consonant clusters without vowels (keyboard mashing)
+  // Only flag if the entire message looks like mashing
+  const words = text.split(/\s+/);
+  const mashCount = words.filter(w => {
+    const clean = w.replace(/[^a-zA-Z]/g, '').toLowerCase();
+    if (clean.length < 4) return false;
+    // No vowels in a 4+ letter word
+    return !/[aeiou]/i.test(clean);
+  }).length;
+  if (words.length > 0 && mashCount / words.length > 0.7 && words.length >= 2) return true;
+
+  // Check 3: Excessive special characters (>60% non-alphanumeric, non-space, non-CJK)
+  const alphaNum = text.replace(/[\s\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g, '');
+  if (alphaNum.length > 5) {
+    const specialCount = alphaNum.replace(/[a-zA-Z0-9]/g, '').length;
+    if (specialCount / alphaNum.length > 0.6) return true;
+  }
+
+  // Check 4: Repeating short patterns (e.g., "abcabcabc", "hahahahaha")
+  if (text.length >= 10) {
+    for (let patLen = 1; patLen <= 3; patLen++) {
+      const pat = text.slice(0, patLen);
+      const repeated = pat.repeat(Math.ceil(text.length / patLen)).slice(0, text.length);
+      if (repeated === text) return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Check if the message should be scored (spam prevention)
  * @param {string} userId - User ID
  * @param {string} content - Message content
@@ -158,6 +219,11 @@ function shouldScoreMessage(userId, content) {
 
   // Check message length
   if (content.length < config.activity.minMessageLength) {
+    return false;
+  }
+
+  // Check for gibberish/low-quality content
+  if (isGibberish(content)) {
     return false;
   }
 
@@ -265,6 +331,30 @@ async function handleReactionAdd(reaction, user) {
   // Don't count reactions on own messages
   if (reaction.message.author?.id === user.id) return;
 
+  // Anti-farming: Check reaction pattern
+  const now = Date.now();
+  const rKey = `${reaction.message.guild.id}_${user.id}`;
+  let rData = reactionTracker.get(rKey);
+
+  if (!rData || now - rData.windowStart > REACTION_WINDOW_MS) {
+    rData = { count: 0, windowStart: now, uniqueMessages: new Set() };
+    reactionTracker.set(rKey, rData);
+  }
+
+  rData.count++;
+  rData.uniqueMessages.add(reaction.message.id);
+
+  // Block if too many reactions in window
+  if (rData.count > REACTION_MAX_PER_WINDOW) {
+    return;
+  }
+
+  // Block if reacting to too few unique messages (mass-reacting same messages)
+  if (rData.count > 10 && rData.uniqueMessages.size / rData.count < REACTION_UNIQUE_RATIO) {
+    securityLogger.flagUser(reaction.message.guild.id, user.id, 'reaction_farming');
+    return;
+  }
+
   trackActivity(reaction.message.guild.id, user.id, 'reaction', 1);
 }
 
@@ -287,16 +377,44 @@ async function handleVoiceStateUpdate(oldState, newState) {
 
   // User joins voice channel
   if (!oldState.channel && newState.channel) {
-    voiceSessions.set(sessionKey, Date.now());
+    voiceSessions.set(sessionKey, {
+      joinTime: Date.now(),
+      muted: newState.selfMute || newState.serverMute,
+      deafened: newState.selfDeaf || newState.serverDeaf,
+    });
+  }
+
+  // User changes mute/deafen state while in channel
+  if (oldState.channel && newState.channel) {
+    const session = voiceSessions.get(sessionKey);
+    if (session) {
+      session.muted = newState.selfMute || newState.serverMute;
+      session.deafened = newState.selfDeaf || newState.serverDeaf;
+    }
   }
 
   // User leaves voice channel
   if (oldState.channel && !newState.channel) {
-    const joinTime = voiceSessions.get(sessionKey);
-    if (joinTime) {
-      const minutes = Math.floor((Date.now() - joinTime) / 60000);
+    const session = voiceSessions.get(sessionKey);
+    if (session) {
+      const minutes = Math.floor((Date.now() - session.joinTime) / 60000);
+
+      // Anti-AFK: If user was muted AND deafened the entire time, count 0
+      // If only muted or only deafened, count at 50% rate
       if (minutes > 0) {
-        trackActivity(guildId, userId, 'voice', minutes);
+        let effectiveMinutes = minutes;
+        if (session.deafened && session.muted) {
+          effectiveMinutes = 0; // Full AFK — no credit
+        } else if (session.deafened || session.muted) {
+          effectiveMinutes = Math.floor(minutes * 0.5); // Partial credit
+        }
+
+        // Cap single session at 4 hours to prevent overnight AFK
+        effectiveMinutes = Math.min(effectiveMinutes, 240);
+
+        if (effectiveMinutes > 0) {
+          trackActivity(guildId, userId, 'voice', effectiveMinutes);
+        }
       }
       voiceSessions.delete(sessionKey);
     }
@@ -365,12 +483,71 @@ async function processBatch() {
     for (const [guildId, updates] of Object.entries(guildGroups)) {
       const settings = guildSettings[guildId];
       await db.batchUpdateActivity(updates, settings);
+
+      // Anomaly detection: check for activity spikes
+      for (const update of updates) {
+        checkActivityAnomaly(guildId, update.userId, update);
+      }
     }
     console.log(`✅ Processed ${events.length} activity events`);
   } catch (error) {
     console.error('❌ Failed to update activity:', error.message);
     // Put events back into queue on failure
     activityQueue.push(...events);
+  }
+}
+
+/**
+ * Check for activity anomalies (sudden spikes)
+ * @param {string} guildId - Guild ID
+ * @param {string} userId - User ID
+ * @param {Object} update - Current batch update data
+ */
+function checkActivityAnomaly(guildId, userId, update) {
+  const key = `${guildId}_${userId}`;
+  const today = new Date().toISOString().split('T')[0];
+
+  if (!activityBaseline.has(key)) {
+    activityBaseline.set(key, { history: [], lastDate: null });
+  }
+
+  const baseline = activityBaseline.get(key);
+  const todayScore = (update.message_count || 0) + (update.reply_count || 0) +
+                     (update.reaction_count || 0) + (update.voice_minutes || 0);
+
+  // Update today's running total
+  if (baseline.lastDate === today) {
+    baseline.todayTotal = (baseline.todayTotal || 0) + todayScore;
+  } else {
+    // New day — push yesterday's total to history
+    if (baseline.lastDate && baseline.todayTotal > 0) {
+      baseline.history.push({ date: baseline.lastDate, score: baseline.todayTotal });
+      if (baseline.history.length > BASELINE_DAYS) {
+        baseline.history.shift();
+      }
+    }
+    baseline.lastDate = today;
+    baseline.todayTotal = todayScore;
+  }
+
+  // Need at least 3 days of history to detect anomalies
+  if (baseline.history.length < 3) return;
+
+  const avgScore = baseline.history.reduce((sum, d) => sum + d.score, 0) / baseline.history.length;
+
+  // Flag if today's activity is 5x the average
+  if (avgScore > 0 && baseline.todayTotal > avgScore * ANOMALY_MULTIPLIER) {
+    securityLogger.flagUser(guildId, userId, 'activity_spike');
+    securityLogger.logSecurityEvent(securityLogger.SECURITY_EVENTS.SUSPICIOUS_ACTIVITY, {
+      guildId,
+      userId,
+      details: {
+        reason: 'Activity spike detected',
+        todayTotal: baseline.todayTotal,
+        avgScore: Math.round(avgScore),
+        multiplier: Math.round(baseline.todayTotal / avgScore)
+      }
+    });
   }
 }
 
@@ -404,6 +581,23 @@ function cleanupTrackingData() {
     }
   }
 
+  // Clean up reaction tracker
+  for (const [key, data] of reactionTracker.entries()) {
+    if (now - data.windowStart > REACTION_WINDOW_MS * 2) {
+      reactionTracker.delete(key);
+    }
+  }
+
+  // Clean up activity baselines older than 14 days of inactivity
+  for (const [key, baseline] of activityBaseline.entries()) {
+    if (baseline.lastDate) {
+      const lastDate = new Date(baseline.lastDate).getTime();
+      if (now - lastDate > 14 * 86400000) {
+        activityBaseline.delete(key);
+      }
+    }
+  }
+
   console.log('🧹 Cleaned up tracking data');
 }
 
@@ -429,4 +623,5 @@ module.exports = {
   handleReactionAdd,
   handleVoiceStateUpdate,
   getQueueStats,
+  isGibberish,
 };

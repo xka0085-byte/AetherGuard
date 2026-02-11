@@ -47,6 +47,12 @@ const SECURITY_EVENTS = {
   DAILY_CAP_REACHED: 'DAILY_CAP_REACHED',
   DUPLICATE_MESSAGE: 'DUPLICATE_MESSAGE',
 
+  // Anti-Sybil
+  CROSS_GUILD_SYBIL: 'CROSS_GUILD_SYBIL',
+  ACTIVITY_SPIKE: 'ACTIVITY_SPIKE',
+  REACTION_FARMING: 'REACTION_FARMING',
+  PENALTY_APPLIED: 'PENALTY_APPLIED',
+
   // System events
   BOT_STARTED: 'BOT_STARTED',
   BOT_SHUTDOWN: 'BOT_SHUTDOWN',
@@ -153,10 +159,11 @@ function logSecurityEvent(event, data = {}) {
  * Get log level based on event type
  */
 function getSecurityLevel(event) {
-  const criticalEvents = ['SUSPICIOUS_ACTIVITY', 'DATABASE_ERROR'];
-  const errorEvents = ['API_ERROR', 'VERIFY_FAILED'];
+  const criticalEvents = ['SUSPICIOUS_ACTIVITY', 'DATABASE_ERROR', 'CROSS_GUILD_SYBIL'];
+  const errorEvents = ['API_ERROR', 'VERIFY_FAILED', 'PENALTY_APPLIED'];
   const warnEvents = ['RATE_LIMIT_COMMAND', 'RATE_LIMIT_VERIFY', 'RATE_LIMIT_SPAM',
-                      'DAILY_CAP_REACHED', 'DUPLICATE_MESSAGE', 'VERIFY_INVALID_ADDRESS'];
+                      'DAILY_CAP_REACHED', 'DUPLICATE_MESSAGE', 'VERIFY_INVALID_ADDRESS',
+                      'ACTIVITY_SPIKE', 'REACTION_FARMING'];
 
   if (criticalEvents.includes(event)) return LOG_LEVELS.CRITICAL;
   if (errorEvents.includes(event)) return LOG_LEVELS.ERROR;
@@ -348,6 +355,43 @@ function getUserFlags(guildId, userId) {
   return tracker ? tracker.flags : [];
 }
 
+// ==================== Progressive Penalty System ====================
+
+// Penalty levels: each flag adds a penalty level
+// Level 1: Warning (logged only)
+// Level 2: Score multiplier reduced to 50%
+// Level 3: Score multiplier reduced to 0% (effectively muted from scoring)
+const PENALTY_THRESHOLDS = {
+  WARNING: 1,      // 1 flag = warning
+  REDUCED: 2,      // 2 flags = 50% score
+  BLOCKED: 3,      // 3+ flags = 0% score (no activity points)
+};
+
+/**
+ * Get penalty multiplier for a user based on their flags
+ * @param {string} guildId - Guild ID
+ * @param {string} userId - User ID
+ * @returns {number} Score multiplier (0.0 to 1.0)
+ */
+function getPenaltyMultiplier(guildId, userId) {
+  const flags = getUserFlags(guildId, userId);
+  const flagCount = flags.length;
+
+  if (flagCount >= PENALTY_THRESHOLDS.BLOCKED) return 0;
+  if (flagCount >= PENALTY_THRESHOLDS.REDUCED) return 0.5;
+  return 1.0;
+}
+
+/**
+ * Check if user is blocked from scoring
+ * @param {string} guildId - Guild ID
+ * @param {string} userId - User ID
+ * @returns {boolean}
+ */
+function isUserBlocked(guildId, userId) {
+  return getPenaltyMultiplier(guildId, userId) === 0;
+}
+
 // ==================== Log Query ====================
 
 /**
@@ -447,6 +491,11 @@ module.exports = {
   flagUser,
   isUserFlagged,
   getUserFlags,
+
+  // Progressive penalty system
+  getPenaltyMultiplier,
+  isUserBlocked,
+  PENALTY_THRESHOLDS,
 
   // Log query
   getRecentSecurityLogs,
