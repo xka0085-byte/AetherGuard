@@ -425,8 +425,26 @@ If you find AetherGuard useful, consider supporting development with a donation:
 
 Accepted on any EVM chain (Ethereum, Polygon, Base, Arbitrum, Optimism, etc.)
 
-**Want a hosted version?** Contact me for managed hosting — no setup required.
+---
 
-## License
+## License & Legal Disclaimer
 
-MIT License
+**License**: MIT License - Free to use, modify, and distribute (including commercial use)
+
+**Important Legal Notice**:
+
+This is open-source software provided "as-is" without warranties. The author (repository owner) is NOT a service provider and does NOT operate any hosted instances of this bot.
+
+**If you deploy this bot (especially as a paid service), YOU are responsible for**:
+- Writing your own Terms of Service and Privacy Policy
+- Complying with applicable laws (GDPR, data protection, consumer protection, etc.)
+- Handling user data securely and legally
+- Any legal issues arising from your deployment
+
+**About the Payment Module**:
+The payment system (`/subscribe`, `/pay` commands) is an OPTIONAL FEATURE that allows deployers to monetize their bot instances. You can:
+- Keep it enabled and charge users (you handle all legal compliance)
+- Disable it by setting `PAYMENTS_ENABLED=false` in your `.env`
+- Remove the payment code entirely if you don't need it
+
+The author receives NO revenue from others using this payment feature. It's simply a tool provided in the codebase for those who want to run a paid service.
