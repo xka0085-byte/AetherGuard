@@ -4,7 +4,7 @@ A multi-chain Discord bot for NFT ownership verification, activity tracking, lea
 
 ## Features
 
-- **Multi-Chain NFT Verification** - Verify NFT ownership on Ethereum, Polygon, and Base
+- **Multi-Chain NFT Verification** - Verify NFT ownership on Ethereum, Polygon, Base, Arbitrum, and Optimism
 - **Auto Role Assignment** - Automatically grant/revoke roles based on NFT holdings
 - **Activity Tracking** - Track messages, replies, reactions, and voice time with customizable scoring
 - **Leaderboard** - Weekly and all-time activity leaderboards
@@ -20,7 +20,7 @@ A multi-chain Discord bot for NFT ownership verification, activity tracking, lea
 
 - **Discord.js** v14
 - **SQLite** (sqlite3)
-- **Alchemy SDK** (Ethereum, Polygon, Base)
+- **Alchemy SDK** (Ethereum, Polygon, Base, Arbitrum, Optimism)
 - **Node.js** >= 18
 - **node-cron** (scheduled tasks)
 - **node-cache** (caching)
@@ -147,7 +147,7 @@ After deploying, set these environment variables in the platform dashboard:
 1. Go to [Alchemy](https://www.alchemy.com/) and create a free account
 2. Create a new app (any name, select Ethereum Mainnet)
 3. Copy your **API Key** from the app dashboard (this is your `ALCHEMY_API_KEY`)
-   - The same API key works for Ethereum, Polygon, and Base queries
+   - The same API key works for all supported chains (Ethereum, Polygon, Base, Arbitrum, Optimism)
 
 ### Step 4: Install and Configure
 
@@ -260,7 +260,7 @@ Once the bot is online and in your server:
 
 **1. Set up NFT verification:**
 ```
-/setup contract:<NFT_CONTRACT_ADDRESS> chain:<ethereum|polygon|base> role:@VerifiedRole amount:1
+/setup contract:<NFT_CONTRACT_ADDRESS> chain:<ethereum|polygon|base|arbitrum|optimism> role:@VerifiedRole amount:1
 ```
 
 Example:
