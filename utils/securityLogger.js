@@ -87,15 +87,40 @@ function writeLog(filePath, content) {
 }
 
 /**
+ * Sanitize sensitive data before logging
+ * Masks wallet addresses, tokens, and API keys
+ */
+function sanitize(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const result = Array.isArray(obj) ? [...obj] : { ...obj };
+  for (const key of Object.keys(result)) {
+    const val = result[key];
+    if (typeof val === 'string') {
+      // Mask wallet addresses: 0x1234...abcd
+      if (/^0x[a-fA-F0-9]{40}$/.test(val)) {
+        result[key] = val.slice(0, 6) + '...' + val.slice(-4);
+      }
+      // Mask tx hashes: 0xabcd...ef01
+      else if (/^0x[a-fA-F0-9]{64}$/.test(val)) {
+        result[key] = val.slice(0, 6) + '...' + val.slice(-4);
+      }
+    } else if (typeof val === 'object' && val !== null) {
+      result[key] = sanitize(val);
+    }
+  }
+  return result;
+}
+
+/**
  * Format log entry
  */
 function formatLogEntry(level, event, data) {
-  return JSON.stringify({
+  return JSON.stringify(sanitize({
     timestamp: getTimestamp(),
     level,
     event,
     ...data
-  });
+  }));
 }
 
 // ==================== Security Event Logs ====================

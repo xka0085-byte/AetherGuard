@@ -21,6 +21,62 @@ const crypto = require('crypto');
 
 let db = null;
 
+// ==================== Wallet Encryption (AES-256-GCM) ====================
+const WALLET_ENC_KEY = process.env.WALLET_ENCRYPTION_KEY || null;
+const ENC_ALGORITHM = 'aes-256-gcm';
+
+/**
+ * Encrypt a wallet address using AES-256-GCM
+ * @param {string} plaintext - Wallet address
+ * @returns {string} Encrypted string in format "enc:iv:ciphertext:tag"
+ */
+function encryptWallet(plaintext) {
+  if (!WALLET_ENC_KEY) return plaintext.toLowerCase();
+  const key = crypto.createHash('sha256').update(WALLET_ENC_KEY).digest();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv(ENC_ALGORITHM, key, iv);
+  let encrypted = cipher.update(plaintext.toLowerCase(), 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const tag = cipher.getAuthTag().toString('hex');
+  return `enc:${iv.toString('hex')}:${encrypted}:${tag}`;
+}
+
+/**
+ * Decrypt a wallet address
+ * @param {string} ciphertext - Encrypted string or plaintext address
+ * @returns {string|null} Decrypted wallet address
+ */
+function decryptWallet(ciphertext) {
+  if (!ciphertext) return null;
+  if (!ciphertext.startsWith('enc:')) return ciphertext;
+  if (!WALLET_ENC_KEY) return null;
+  try {
+    const parts = ciphertext.split(':');
+    const iv = Buffer.from(parts[1], 'hex');
+    const encrypted = parts[2];
+    const tag = Buffer.from(parts[3], 'hex');
+    const key = crypto.createHash('sha256').update(WALLET_ENC_KEY).digest();
+    const decipher = crypto.createDecipheriv(ENC_ALGORITHM, key, iv);
+    decipher.setAuthTag(tag);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (e) {
+    console.error('Wallet decryption failed:', e.message);
+    return null;
+  }
+}
+
+/**
+ * Decrypt wallet_address field on a row object (mutates in place)
+ */
+function decryptRow(row) {
+  if (row && row.wallet_address) {
+    row.wallet_address = decryptWallet(row.wallet_address);
+  }
+  return row;
+}
+
 /**
  * Convert wallet address to SHA-256 hash
  * @param {string} walletAddress - Wallet address
@@ -439,7 +495,8 @@ async function getEnabledActivityGuilds() {
  * @returns {Promise<Object|null>} User object or null
  */
 async function getVerifiedUser(guildId, userId) {
-  return dbGet('SELECT * FROM verified_users WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  const row = await dbGet('SELECT * FROM verified_users WHERE guild_id = ? AND user_id = ?', [guildId, userId]);
+  return decryptRow(row);
 }
 
 /**
@@ -449,12 +506,10 @@ async function getVerifiedUser(guildId, userId) {
  * @returns {Promise<Object|null>} User object or null
  */
 async function getVerifiedUserByWallet(guildId, walletAddress) {
-  const walletLower = walletAddress.toLowerCase();
-  const row = await dbGet('SELECT * FROM verified_users WHERE guild_id = ? AND wallet_address = ?', [guildId, walletLower]);
-  if (row) return row;
-  // Compatibility with old data: fallback to wallet_hash query
+  // Always use wallet_hash for lookups (works regardless of encryption)
   const walletHash = hashWallet(walletAddress);
-  return dbGet('SELECT * FROM verified_users WHERE guild_id = ? AND wallet_hash = ?', [guildId, walletHash]);
+  const row = await dbGet('SELECT * FROM verified_users WHERE guild_id = ? AND wallet_hash = ?', [guildId, walletHash]);
+  return decryptRow(row);
 }
 
 /**
@@ -465,7 +520,7 @@ async function getVerifiedUserByWallet(guildId, walletAddress) {
 async function upsertVerifiedUser(data) {
   const { guildId, userId, walletAddress, nftBalance } = data;
   const walletHash = hashWallet(walletAddress);
-  const walletLower = walletAddress.toLowerCase();
+  const walletEncrypted = encryptWallet(walletAddress);
 
   await dbRun(`
     INSERT INTO verified_users (guild_id, user_id, wallet_address, wallet_hash, nft_balance)
@@ -475,7 +530,7 @@ async function upsertVerifiedUser(data) {
       wallet_hash = excluded.wallet_hash,
       nft_balance = excluded.nft_balance,
       last_checked = CURRENT_TIMESTAMP
-  `, [guildId, userId, walletLower, walletHash, nftBalance]);
+  `, [guildId, userId, walletEncrypted, walletHash, nftBalance]);
 
   return getVerifiedUser(guildId, userId);
 }
@@ -488,19 +543,13 @@ async function upsertVerifiedUser(data) {
  * @returns {Promise<boolean>} Whether it is used by another user
  */
 async function isWalletUsedByOther(guildId, userId, walletAddress) {
-  const walletLower = walletAddress.toLowerCase();
-  const row = await dbGet(
-    'SELECT user_id FROM verified_users WHERE guild_id = ? AND wallet_address = ? AND user_id != ?',
-    [guildId, walletLower, userId]
-  );
-  if (row) return true;
-  // Compatibility with old data: check wallet_hash records without wallet_address
+  // Use wallet_hash for lookups (works with both encrypted and plaintext storage)
   const walletHash = hashWallet(walletAddress);
-  const hashRow = await dbGet(
-    'SELECT user_id FROM verified_users WHERE guild_id = ? AND wallet_hash = ? AND wallet_address IS NULL AND user_id != ?',
+  const row = await dbGet(
+    'SELECT user_id FROM verified_users WHERE guild_id = ? AND wallet_hash = ? AND user_id != ?',
     [guildId, walletHash, userId]
   );
-  return !!hashRow;
+  return !!row;
 }
 
 /**
@@ -520,12 +569,13 @@ async function deleteVerifiedUser(guildId, userId) {
  * @returns {Promise<Array>} User list
  */
 async function getVerifiedUsers(guildId, limit = 100) {
-  return dbAll(`
+  const rows = await dbAll(`
     SELECT * FROM verified_users
     WHERE guild_id = ?
     ORDER BY verified_at DESC
     LIMIT ?
   `, [guildId, limit]);
+  return rows.map(decryptRow);
 }
 
 /**
@@ -545,7 +595,8 @@ async function getVerifiedCount(guildId) {
  */
 async function getUsersNeedingReverification(intervalMs) {
   const threshold = new Date(Date.now() - intervalMs).toISOString();
-  return dbAll('SELECT * FROM verified_users WHERE last_checked < ?', [threshold]);
+  const rows = await dbAll('SELECT * FROM verified_users WHERE last_checked < ?', [threshold]);
+  return rows.map(decryptRow);
 }
 
 /**
@@ -554,12 +605,13 @@ async function getUsersNeedingReverification(intervalMs) {
  * @returns {Promise<Array>} User list
  */
 async function getExpiredVerifications(hours) {
-  return dbAll(`
+  const rows = await dbAll(`
     SELECT v.*, c.nft_contract_address, c.chain, c.required_amount, c.verified_role_id
     FROM verified_users v
     JOIN communities c ON v.guild_id = c.guild_id
     WHERE datetime(v.last_checked) < datetime('now', '-' || ? || ' hours')
   `, [hours]);
+  return rows.map(decryptRow);
 }
 
 /**

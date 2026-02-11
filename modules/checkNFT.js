@@ -17,8 +17,8 @@ const { Alchemy, Network } = require('alchemy-sdk');
 const NodeCache = require('node-cache');
 const config = require('../config');
 
-// Cache verification results for 24 hours
-const cache = new NodeCache({ stdTTL: 86400 });
+// Cache verification results for 1 hour (reduced from 24h to limit NFT transfer abuse window)
+const cache = new NodeCache({ stdTTL: 3600 });
 
 // Alchemy Network mapping
 const NETWORK_MAP = {
@@ -54,12 +54,24 @@ function getAlchemyInstance(chain = 'ethereum') {
 }
 
 /**
- * Validate Ethereum wallet address format
+ * Validate Ethereum wallet address format (with EIP-55 checksum when mixed-case)
  * @param {string} address - Wallet address
  * @returns {boolean}
  */
 function isValidAddress(address) {
-  return /^0x[a-fA-F0-9]{40}$/.test(address);
+  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return false;
+  // If all lowercase or all uppercase, skip checksum (user may have copy-pasted)
+  const hex = address.slice(2);
+  if (hex === hex.toLowerCase() || hex === hex.toUpperCase()) return true;
+  // Mixed case: validate EIP-55 checksum using ethers (from alchemy-sdk)
+  try {
+    const { ethers } = require('ethers');
+    const checksummed = ethers.getAddress(address);
+    return checksummed === address;
+  } catch {
+    // If ethers not available or address invalid, accept it (fallback to basic check)
+    return true;
+  }
 }
 
 /**

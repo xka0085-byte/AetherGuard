@@ -20,7 +20,7 @@ const cron = require('node-cron');
 
 // Import modules
 const db = require('./database/db');
-const { checkNFTOwnership } = require('./modules/checkNFT');
+const { checkNFTOwnership, clearCache } = require('./modules/checkNFT');
 const activityTrackerModule = require('./modules/activityTracker');
 const leaderboardModule = require('./modules/leaderboard');
 const config = require('./config');
@@ -806,6 +806,9 @@ async function handleVerify(interaction) {
         const chain = community.chain || 'ethereum';
         const chainDisplay = chainNames[chain] || chain;
 
+        // Force fresh check on /verify (bypass cache)
+        clearCache(wallet, community.nft_contract_address, chain);
+
         // Check NFT ownership (pass in chain parameter)
         const nftResult = await checkNFTOwnership(
             wallet,
@@ -1174,6 +1177,13 @@ async function handlePay(interaction) {
             RPC_ERROR: 'Blockchain query failed. Please try again later.',
         };
         return interaction.editReply({ content: `❌ ${msgs[result.error] || 'Verification failed.'}` });
+    }
+
+    // Anti-front-running: verify tx sender matches user's verified wallet
+    if (result.from.toLowerCase() !== verified.wallet_address.toLowerCase()) {
+        return interaction.editReply({
+            content: '❌ Transaction sender does not match your verified wallet.\nPayments must be sent from the wallet you used with `/verify`.'
+        });
     }
 
     // Record to database (prevent race conditions: if returns false, it means another request already recorded it)
