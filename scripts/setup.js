@@ -86,6 +86,10 @@ async function main() {
         }
     }
 
+    // Quick mode option
+    const quickMode = await ask('Use quick mode? (only required fields) (y/n)', 'y');
+    const isQuickMode = quickMode.toLowerCase() === 'y';
+
     // === Required Configuration ===
     print('\n--- Required Configuration ---\n');
 
@@ -117,22 +121,30 @@ async function main() {
     print('  [OK] Alchemy key valid');
 
     // === Optional Configuration ===
-    print('\n--- Optional Configuration (press Enter to skip) ---\n');
+    let botOwnerId = '';
+    let feedbackChannelId = '';
+    let payReceiver = '';
+    let payPrice = '5';
+    let subscriptionPhase = 'beta';
 
-    const botOwnerId = await ask('Your Discord User ID (for /bot-stats)');
-    if (botOwnerId && !validateClientId(botOwnerId)) {
-        print('  [!] Warning: ID format looks incorrect, saving anyway');
+    if (!isQuickMode) {
+        print('\n--- Optional Configuration (press Enter to skip) ---\n');
+
+        botOwnerId = await ask('Your Discord User ID (for /bot-stats)');
+        if (botOwnerId && !validateClientId(botOwnerId)) {
+            print('  [!] Warning: ID format looks incorrect, saving anyway');
+        }
+
+        feedbackChannelId = await ask('Feedback Channel ID');
+
+        payReceiver = await ask('Payment receiver wallet address');
+        if (payReceiver && !validateWalletAddress(payReceiver)) {
+            print('  [!] Warning: Address format looks incorrect, saving anyway');
+        }
+
+        payPrice = await ask('Subscription price (USDC/USDT)', '5');
+        subscriptionPhase = await ask('Subscription phase (beta/paid)', 'beta');
     }
-
-    const feedbackChannelId = await ask('Feedback Channel ID');
-
-    const payReceiver = await ask('Payment receiver wallet address');
-    if (payReceiver && !validateWalletAddress(payReceiver)) {
-        print('  [!] Warning: Address format looks incorrect, saving anyway');
-    }
-
-    const payPrice = await ask('Subscription price (USDC/USDT)', '5');
-    const subscriptionPhase = await ask('Subscription phase (beta/paid)', 'beta');
 
     // === Generate .env ===
     const walletEncKey = crypto.randomBytes(32).toString('hex');

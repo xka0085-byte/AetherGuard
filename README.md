@@ -58,15 +58,17 @@ A multi-chain Discord bot for NFT ownership verification, activity tracking, lea
 
 ## Quick Start
 
+**Prerequisites:** Node.js >= 18, [Discord Bot Token](https://discord.com/developers/applications), [Alchemy API Key](https://www.alchemy.com/)
+
+**Deploy in 3 commands:**
+
 ```bash
-git clone https://github.com/xka0085-byte/AetherGuard.git
-cd AetherGuard
-npm install
-npm run setup    # Interactive wizard - creates .env for you
+git clone https://github.com/xka0085-byte/AetherGuard.git && cd AetherGuard
+npm install && npm run setup
 npm start
 ```
 
-The setup wizard will guide you through entering your Discord Token, Client ID, and Alchemy API Key. No manual file editing needed.
+The setup wizard will guide you through configuration. No manual file editing needed.
 
 ---
 
@@ -387,6 +389,66 @@ When enabled via `/activity-setup nft_bonus:True`:
 │   ├── audit.log
 │   └── user_activity.log
 ```
+
+## FAQ (Frequently Asked Questions)
+
+### How long does deployment take?
+**10-15 minutes** for first-time setup:
+- 2-3 minutes: Create Discord bot and get Alchemy API key
+- 2 minutes: Clone repo and install dependencies
+- 1 minute: Run setup wizard
+- 5 minutes: Invite bot and configure with `/setup`
+
+### Do I need a server to run this bot?
+Yes, the bot needs to run 24/7 on a server. Options:
+- **Free hosting**: Railway (500 hours/month), Render (free tier)
+- **VPS**: DigitalOcean ($6/month), Vultr ($5/month), AWS EC2
+- **Local**: Your own computer (must stay online)
+
+### Can I use this bot for free?
+Yes! The bot itself is free and open-source. You only need:
+- **Alchemy API**: Free tier (300M compute units/month) is enough for small-medium servers
+- **Hosting**: Free options available (Railway, Render) or paid VPS ($5-10/month)
+
+### What if I don't have a credit card for Alchemy?
+Alchemy's free tier doesn't require a credit card. Just sign up with email. If you exceed the free tier, you can:
+- Use multiple Alchemy accounts (one per chain)
+- Switch to other RPC providers (Infura, QuickNode)
+- Self-host an Ethereum node (advanced)
+
+### Can I monetize this bot?
+Yes! The MIT license allows commercial use. You can:
+- Charge servers a subscription fee (built-in payment system)
+- Offer it as a managed service
+- Add premium features
+
+**Important**: If you run it as a paid service, you must write your own Terms of Service and Privacy Policy (see Legal Disclaimer section).
+
+### How do I update the bot when new versions are released?
+```bash
+cd AetherGuard
+git pull origin main
+npm install  # Update dependencies if needed
+npm start    # Restart bot
+```
+
+### Can I customize the bot for my needs?
+Absolutely! The code is open-source and well-documented. Common customizations:
+- Change subscription pricing (`PAY_PRICE` in .env)
+- Add more chains (edit `NETWORK_MAP` in modules/checkNFT.js)
+- Modify activity scoring rules (modules/activityTracker.js)
+- Add custom commands (index.js)
+
+### Is my data secure?
+The bot includes security features:
+- Wallet addresses encrypted with AES-256-GCM (if `WALLET_ENCRYPTION_KEY` is set)
+- Security event logging and audit trails
+- Rate limiting on sensitive commands
+- No data sent to third parties (except Alchemy for blockchain queries)
+
+**Important**: Keep your `.env` file secure and never commit it to Git.
+
+---
 
 ## Troubleshooting
 
