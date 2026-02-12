@@ -430,16 +430,13 @@ Alchemy's free tier doesn't require a credit card. Just sign up with email. If y
 - Self-host an Ethereum node (advanced)
 
 ### Can I monetize this bot?
-Yes, but with conditions. This project uses the **AGPL-3.0 license**:
+Yes! This project uses the **MIT license**, which means:
 
-**For Personal/Non-Commercial Use**:
-- ✅ Free to use, modify, and self-host
+- ✅ Free to use, modify, and distribute
+- ✅ Use for personal or commercial purposes
 - ✅ Charge your own community members (built-in payment system)
-- ✅ No restrictions
-
-**For Commercial/SaaS Use**:
-- ⚠️ If you modify and offer it as a service, you MUST open-source your modifications (AGPL requirement)
-- ⚠️ If you want to offer it as a closed-source commercial service, contact the author for a commercial license
+- ✅ Offer as a paid service (hosted or self-hosted)
+- ✅ No restrictions on closed-source modifications
 
 **Important**: If you run it as a paid service, you must write your own Terms of Service and Privacy Policy (see Legal Disclaimer section).
 
@@ -510,13 +507,13 @@ Accepted on any EVM chain (Ethereum, Polygon, Base, Arbitrum, Optimism, etc.)
 
 ## License & Legal Disclaimer
 
-**License**: AGPL-3.0-only - Free for personal and non-commercial use
+**License**: MIT - Free for any use, including commercial
 
 **What this means**:
-- ✅ You can use, modify, and self-host this bot for free
-- ✅ You can charge your own community members using the built-in payment system
-- ⚠️ If you modify and provide it as a service (SaaS), you must open-source your modifications
-- ⚠️ For closed-source commercial use, contact the author for a commercial license
+- ✅ You can use, modify, and distribute this bot freely
+- ✅ Use for personal or commercial purposes without restrictions
+- ✅ No requirement to open-source your modifications
+- ✅ Charge for services, create closed-source derivatives, etc.
 
 See the [LICENSE](LICENSE) file for full terms.
 
