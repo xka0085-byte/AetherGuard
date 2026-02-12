@@ -9,6 +9,8 @@ const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const https = require('https');
+const { exec } = require('child_process');
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -40,6 +42,8 @@ function printHeader() {
     print('  2. Discord Application (Client) ID');
     print('  3. Alchemy API Key');
     print('');
+    print("Don't have these yet? The wizard will show you where to get them.");
+    print('');
 }
 
 function checkNodeVersion() {
@@ -54,7 +58,6 @@ function checkNodeVersion() {
 }
 
 function validateToken(token) {
-    // Discord bot tokens have 3 parts separated by dots
     return token.split('.').length === 3;
 }
 
@@ -68,6 +71,68 @@ function validateAlchemyKey(key) {
 
 function validateWalletAddress(addr) {
     return /^0x[a-fA-F0-9]{40}$/.test(addr);
+}
+
+/**
+ * Verify Discord token online — returns bot username or null
+ */
+function verifyDiscordToken(token) {
+    return new Promise((resolve) => {
+        const req = https.get('https://discord.com/api/v10/users/@me', {
+            headers: { Authorization: `Bot ${token}` },
+        }, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                try {
+                    if (res.statusCode === 200) {
+                        const user = JSON.parse(data);
+                        resolve(user.username || 'Unknown');
+                    } else {
+                        resolve(null);
+                    }
+                } catch { resolve(null); }
+            });
+        });
+        req.on('error', () => resolve(null));
+        req.setTimeout(10000, () => { req.destroy(); resolve(null); });
+    });
+}
+
+/**
+ * Verify Alchemy API key online — returns true if valid
+ */
+function verifyAlchemyKey(key) {
+    return new Promise((resolve) => {
+        const body = JSON.stringify({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 });
+        const req = https.request(`https://eth-mainnet.g.alchemy.com/v2/${key}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': body.length },
+        }, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                try {
+                    const json = JSON.parse(data);
+                    resolve(!!json.result);
+                } catch { resolve(false); }
+            });
+        });
+        req.on('error', () => resolve(false));
+        req.setTimeout(10000, () => { req.destroy(); resolve(false); });
+        req.write(body);
+        req.end();
+    });
+}
+
+/**
+ * Open URL in default browser (cross-platform)
+ */
+function openBrowser(url) {
+    const cmd = process.platform === 'win32' ? `start "" "${url}"`
+        : process.platform === 'darwin' ? `open "${url}"`
+        : `xdg-open "${url}"`;
+    exec(cmd, () => {});
 }
 
 async function main() {
@@ -93,32 +158,55 @@ async function main() {
     // === Required Configuration ===
     print('\n--- Required Configuration ---\n');
 
+    // Discord Token
     let discordToken = '';
-    while (!validateToken(discordToken)) {
+    while (true) {
         discordToken = await ask('Discord Bot Token');
         if (!validateToken(discordToken)) {
-            print('  [!] Invalid token format. Get it from: https://discord.com/developers/applications');
+            print('  [!] Invalid token format.');
+            print('      Get it from: https://discord.com/developers/applications > Bot > Reset Token');
+            continue;
+        }
+        print('  Verifying token online...');
+        const botName = await verifyDiscordToken(discordToken);
+        if (botName) {
+            print(`  [OK] Token valid — Bot: ${botName}`);
+            break;
+        } else {
+            print('  [!] Token rejected by Discord. Please check and try again.');
+            print('      Make sure you copied the full token from Developer Portal > Bot > Reset Token');
         }
     }
-    print('  [OK] Token format valid');
 
+    // Client ID
     let clientId = '';
     while (!validateClientId(clientId)) {
         clientId = await ask('Discord Application (Client) ID');
         if (!validateClientId(clientId)) {
             print('  [!] Invalid Client ID. Should be a 17-20 digit number.');
+            print('      Find it at: Developer Portal > General Information > Application ID');
         }
     }
     print('  [OK] Client ID valid');
 
+    // Alchemy Key
     let alchemyKey = '';
-    while (!validateAlchemyKey(alchemyKey)) {
+    while (true) {
         alchemyKey = await ask('Alchemy API Key');
         if (!validateAlchemyKey(alchemyKey)) {
             print('  [!] Invalid API key. Get one free at: https://www.alchemy.com/');
+            continue;
+        }
+        print('  Verifying Alchemy key online...');
+        const valid = await verifyAlchemyKey(alchemyKey);
+        if (valid) {
+            print('  [OK] Alchemy key valid — blockchain connection working');
+            break;
+        } else {
+            print('  [!] Alchemy key rejected. Please check and try again.');
+            print('      Get your key at: https://dashboard.alchemy.com/ > Apps > View Key');
         }
     }
-    print('  [OK] Alchemy key valid');
 
     // === Optional Configuration ===
     let botOwnerId = '';
@@ -193,24 +281,35 @@ async function main() {
         print('[OK] Dependencies installed');
     }
 
-    // === Print summary ===
+    // === Invite URL ===
+    const inviteUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&permissions=269569088&scope=bot%20applications.commands`;
+
     print('\n' + '='.repeat(50));
     print('  Setup Complete!');
     print('='.repeat(50));
     print('');
-    print('Next steps:');
-    print('  1. Make sure you enabled these Privileged Intents in Discord Developer Portal:');
-    print('     - SERVER MEMBERS INTENT');
-    print('     - MESSAGE CONTENT INTENT');
+    print('IMPORTANT: Make sure you enabled these Privileged Intents:');
+    print('  Discord Developer Portal > Bot > Enable:');
+    print('  [x] SERVER MEMBERS INTENT');
+    print('  [x] MESSAGE CONTENT INTENT');
     print('');
-    print('  2. Invite the bot to your server:');
-    print(`     https://discord.com/api/oauth2/authorize?client_id=${clientId}&permissions=269569088&scope=bot%20applications.commands`);
+
+    // Offer to open invite URL in browser
+    const openInvite = await ask('Open bot invite link in browser now? (y/n)', 'y');
+    if (openInvite.toLowerCase() === 'y') {
+        print('  Opening browser...');
+        openBrowser(inviteUrl);
+    } else {
+        print('  Invite URL (copy and open in browser):');
+        print(`  ${inviteUrl}`);
+    }
+
     print('');
-    print('  3. Start the bot:');
-    print('     npm start');
+    print('Next: Start the bot with:');
+    print('  npm start');
     print('');
-    print('  4. In your Discord server, run:');
-    print('     /setup contract:<NFT_ADDRESS> chain:ethereum role:@YourRole amount:1');
+    print('Then in your Discord server, run:');
+    print('  /setup contract:<NFT_ADDRESS> chain:ethereum role:@YourRole amount:1');
     print('');
 
     rl.close();

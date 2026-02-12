@@ -77,7 +77,11 @@ npm install && npm run setup
 npm start
 ```
 
-The setup wizard will guide you through configuration. No manual file editing needed.
+The setup wizard will:
+- Validate your Discord token and Alchemy key online (catches errors before you start)
+- Auto-generate a secure wallet encryption key
+- Open the bot invite link in your browser
+- Show you the exact `/setup` command to run in your server
 
 ---
 
