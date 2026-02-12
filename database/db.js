@@ -89,40 +89,63 @@ function hashWallet(walletAddress) {
     .digest('hex');
 }
 
+// ==================== SQLITE_BUSY Retry Wrapper ====================
+const BUSY_MAX_RETRIES = 3;
+const BUSY_BASE_DELAY_MS = 100;
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function withBusyRetry(fn) {
+  for (let attempt = 0; attempt <= BUSY_MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (err && err.code === 'SQLITE_BUSY' && attempt < BUSY_MAX_RETRIES) {
+        const delay = BUSY_BASE_DELAY_MS * Math.pow(2, attempt);
+        await sleep(delay);
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 /**
- * Wrap db.run as Promise
+ * Wrap db.run as Promise (with SQLITE_BUSY retry)
  */
 function dbRun(sql, params = []) {
-  return new Promise((resolve, reject) => {
+  return withBusyRetry(() => new Promise((resolve, reject) => {
     db.run(sql, params, function (err) {
       if (err) reject(err);
       else resolve({ lastID: this.lastID, changes: this.changes });
     });
-  });
+  }));
 }
 
 /**
- * Wrap db.get as Promise
+ * Wrap db.get as Promise (with SQLITE_BUSY retry)
  */
 function dbGet(sql, params = []) {
-  return new Promise((resolve, reject) => {
+  return withBusyRetry(() => new Promise((resolve, reject) => {
     db.get(sql, params, (err, row) => {
       if (err) reject(err);
       else resolve(row || null);
     });
-  });
+  }));
 }
 
 /**
- * Wrap db.all as Promise
+ * Wrap db.all as Promise (with SQLITE_BUSY retry)
  */
 function dbAll(sql, params = []) {
-  return new Promise((resolve, reject) => {
+  return withBusyRetry(() => new Promise((resolve, reject) => {
     db.all(sql, params, (err, rows) => {
       if (err) reject(err);
       else resolve(rows || []);
     });
-  });
+  }));
 }
 
 /**
@@ -1112,5 +1135,29 @@ module.exports = {
       foundingCount: foundingRow?.total || 0,
       activeSubscriptions: activeSubs
     };
+  },
+
+  // ===== User Behavior / Flags =====
+  getUserFlags: async function (guildId, userId) {
+    const row = await dbGet(
+      'SELECT flags FROM user_behavior WHERE guild_id = ? AND user_id = ?',
+      [guildId, userId]
+    );
+    if (!row || !row.flags) return [];
+    try { return JSON.parse(row.flags); } catch { return []; }
+  },
+  setUserFlags: async function (guildId, userId, flags) {
+    const flagsJson = JSON.stringify(flags);
+    await dbRun(`
+      INSERT INTO user_behavior (guild_id, user_id, flags, last_seen)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(guild_id, user_id) DO UPDATE SET flags = ?, last_seen = CURRENT_TIMESTAMP
+    `, [guildId, userId, flagsJson, flagsJson]);
+  },
+  clearUserFlags: async function (guildId, userId) {
+    await dbRun(
+      'UPDATE user_behavior SET flags = \'[]\' WHERE guild_id = ? AND user_id = ?',
+      [guildId, userId]
+    );
   },
 };

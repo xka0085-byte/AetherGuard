@@ -11,6 +11,13 @@
 const fs = require('fs');
 const path = require('path');
 
+// Lazy-loaded db reference (avoids circular dependency)
+let _db = null;
+function getDb() {
+  if (!_db) _db = require('../database/db');
+  return _db;
+}
+
 // Log file paths
 const LOG_DIR = path.join(__dirname, '..', 'logs');
 const SECURITY_LOG = path.join(LOG_DIR, 'security.log');
@@ -310,13 +317,16 @@ function getUserBehaviorReport(guildId, userId) {
   return userBehaviorTracker.get(key) || null;
 }
 
+// Flag expiry time (24 hours)
+const FLAG_EXPIRY_MS = 24 * 60 * 60 * 1000;
+
 /**
- * Flag user as suspicious
+ * Flag user as suspicious (persisted to database)
  * @param {string} guildId - Guild ID
  * @param {string} userId - User ID
  * @param {string} reason - Reason
  */
-function flagUser(guildId, userId, reason) {
+async function flagUser(guildId, userId, reason) {
   const key = `${guildId}:${userId}`;
 
   if (!userBehaviorTracker.has(key)) {
@@ -324,35 +334,116 @@ function flagUser(guildId, userId, reason) {
   }
 
   const tracker = userBehaviorTracker.get(key);
-  if (!tracker.flags.includes(reason)) {
-    tracker.flags.push(reason);
+
+  // Check if this reason already exists (non-expired)
+  const now = Date.now();
+  const existingReasons = (tracker.flags || [])
+    .filter(f => typeof f === 'object' ? (now - f.timestamp < FLAG_EXPIRY_MS) : true)
+    .map(f => typeof f === 'object' ? f.reason : f);
+
+  if (existingReasons.includes(reason)) return;
+
+  // Add flag with timestamp
+  const flagEntry = { reason, timestamp: now };
+  tracker.flags.push(flagEntry);
+
+  // Persist to database
+  try {
+    const db = getDb();
+    await db.setUserFlags(guildId, userId, tracker.flags);
+  } catch (e) {
+    console.error('Failed to persist flag to db:', e.message);
   }
 
   logSecurityEvent(SECURITY_EVENTS.SUSPICIOUS_ACTIVITY, {
     guildId,
     userId,
-    details: { reason, flags: tracker.flags }
+    details: { reason, flags: existingReasons.concat(reason) }
   });
 }
 
 /**
- * Check if the user is flagged
+ * Check if the user is flagged (loads from db if not in memory)
  * @param {string} guildId - Guild ID
  * @param {string} userId - User ID
+ * @returns {Promise<boolean>}
  */
-function isUserFlagged(guildId, userId) {
-  const key = `${guildId}:${userId}`;
-  const tracker = userBehaviorTracker.get(key);
-  return tracker ? tracker.flags.length > 0 : false;
+async function isUserFlagged(guildId, userId) {
+  const flags = await getUserFlags(guildId, userId);
+  return flags.length > 0;
 }
 
 /**
- * Get user flags list
+ * Get user flags list (filters expired flags, loads from db if not in memory)
+ * @returns {Promise<string[]>}
  */
-function getUserFlags(guildId, userId) {
+async function getUserFlags(guildId, userId) {
+  const key = `${guildId}:${userId}`;
+  if (!userBehaviorTracker.has(key)) {
+    await loadUserFlags(guildId, userId);
+  }
+  const tracker = userBehaviorTracker.get(key);
+  if (!tracker) return [];
+
+  const now = Date.now();
+  // Filter out expired flags
+  return tracker.flags
+    .filter(f => {
+      if (typeof f === 'object' && f.timestamp) {
+        return now - f.timestamp < FLAG_EXPIRY_MS;
+      }
+      return true; // Legacy string flags don't expire
+    })
+    .map(f => typeof f === 'object' ? f.reason : f);
+}
+
+/**
+ * Load user flags from database into memory (call on bot startup or first access)
+ * @param {string} guildId - Guild ID
+ * @param {string} userId - User ID
+ */
+async function loadUserFlags(guildId, userId) {
+  const key = `${guildId}:${userId}`;
+  try {
+    const db = getDb();
+    const dbFlags = await db.getUserFlags(guildId, userId);
+    if (dbFlags.length > 0) {
+      if (!userBehaviorTracker.has(key)) {
+        userBehaviorTracker.set(key, {
+          firstSeen: Date.now(),
+          lastSeen: Date.now(),
+          actions: [],
+          verifyAttempts: 0,
+          commandCount: 0,
+          messageCount: 0,
+          flags: dbFlags
+        });
+      } else {
+        userBehaviorTracker.get(key).flags = dbFlags;
+      }
+    }
+  } catch (e) {
+    // Silently fail — memory flags still work
+  }
+}
+
+/**
+ * Clear all flags for a user (admin unban)
+ * @param {string} guildId - Guild ID
+ * @param {string} userId - User ID
+ */
+async function clearUserFlags(guildId, userId) {
   const key = `${guildId}:${userId}`;
   const tracker = userBehaviorTracker.get(key);
-  return tracker ? tracker.flags : [];
+  if (tracker) {
+    tracker.flags = [];
+  }
+  try {
+    const db = getDb();
+    await db.clearUserFlags(guildId, userId);
+  } catch (e) {
+    console.error('Failed to clear flags in db:', e.message);
+  }
 }
 
 // ==================== Progressive Penalty System ====================
@@ -371,10 +462,10 @@ const PENALTY_THRESHOLDS = {
  * Get penalty multiplier for a user based on their flags
  * @param {string} guildId - Guild ID
  * @param {string} userId - User ID
- * @returns {number} Score multiplier (0.0 to 1.0)
+ * @returns {Promise<number>} Score multiplier (0.0 to 1.0)
  */
-function getPenaltyMultiplier(guildId, userId) {
-  const flags = getUserFlags(guildId, userId);
+async function getPenaltyMultiplier(guildId, userId) {
+  const flags = await getUserFlags(guildId, userId);
   const flagCount = flags.length;
 
   if (flagCount >= PENALTY_THRESHOLDS.BLOCKED) return 0;
@@ -386,10 +477,10 @@ function getPenaltyMultiplier(guildId, userId) {
  * Check if user is blocked from scoring
  * @param {string} guildId - Guild ID
  * @param {string} userId - User ID
- * @returns {boolean}
+ * @returns {Promise<boolean>}
  */
-function isUserBlocked(guildId, userId) {
-  return getPenaltyMultiplier(guildId, userId) === 0;
+async function isUserBlocked(guildId, userId) {
+  return (await getPenaltyMultiplier(guildId, userId)) === 0;
 }
 
 // ==================== Log Query ====================
@@ -491,6 +582,8 @@ module.exports = {
   flagUser,
   isUserFlagged,
   getUserFlags,
+  loadUserFlags,
+  clearUserFlags,
 
   // Progressive penalty system
   getPenaltyMultiplier,

@@ -80,8 +80,8 @@ function formatDate(date) {
  * @param {number} topN - Top N (default: 10)
  * @returns {Promise<Array>}
  */
-async function generateLeaderboard(guildId, topN = 10) {
-  const leaderboard = await db.getLeaderboard(guildId, topN);
+async function generateLeaderboard(guildId, topN = 10, type = 'total') {
+  const leaderboard = await db.getLeaderboard(guildId, topN, type);
 
   // If Discord client exists, fetch username
   if (discordClient) {
@@ -133,8 +133,8 @@ async function postLeaderboard(guildId, resetAfter = false) {
     // Get date range
     const { weekStart, weekEnd } = getCurrentWeekRange();
 
-    // Generate leaderboard
-    const leaderboard = await generateLeaderboard(guildId, 10);
+    // Generate leaderboard (weekly scores for auto-post)
+    const leaderboard = await generateLeaderboard(guildId, 10, 'week');
 
     if (leaderboard.length === 0) {
       console.log(`📊 No activity data for guild ${guildId}`);

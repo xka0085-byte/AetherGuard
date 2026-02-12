@@ -107,6 +107,7 @@ async function verifyPayment(txHash, chain) {
 
   for (const log of receipt.logs) {
     if (log.topics[0] !== TRANSFER_TOPIC) continue;
+    if (log.topics.length < 3) continue; // Skip malformed logs
 
     const contractAddr = log.address.toLowerCase();
     const tokenInfo = tokenMap[contractAddr];

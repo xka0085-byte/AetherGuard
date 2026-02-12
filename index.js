@@ -413,6 +413,16 @@ const commands = [
         .setName('bot-stats')
         .setDescription('Owner-only: view bot stats'),
 
+    // /unflag - Admin: clear user flags
+    new SlashCommandBuilder()
+        .setName('unflag')
+        .setDescription('Admin: clear all penalty flags for a user')
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .addUserOption(option =>
+            option.setName('user')
+                .setDescription('User to unflag')
+                .setRequired(true)),
+
     // /subscribe - Show payment info
     new SlashCommandBuilder()
         .setName('subscribe')
@@ -1422,7 +1432,7 @@ client.once('ready', async () => {
     await registerCommands();
 
     // Initialize activity tracker
-    activityTrackerModule.initActivityTracker();
+    activityTrackerModule.initActivityTracker(client);
 
     // Initialize leaderboard manager
     leaderboardModule.initLeaderboard(client);
@@ -1575,6 +1585,17 @@ client.on('interactionCreate', async (interaction) => {
             case 'bot-stats':
                 await handleBotStats(interaction);
                 break;
+            case 'unflag': {
+                const targetUser = interaction.options.getUser('user');
+                const flags = await securityLogger.getUserFlags(interaction.guildId, targetUser.id);
+                if (flags.length === 0) {
+                    await interaction.reply({ content: `${targetUser.username} has no active flags.`, ephemeral: true });
+                } else {
+                    await securityLogger.clearUserFlags(interaction.guildId, targetUser.id);
+                    await interaction.reply({ content: `Cleared ${flags.length} flag(s) for ${targetUser.username}. They can now earn activity points again.`, ephemeral: true });
+                }
+                break;
+            }
             case 'verify':
                 await handleVerify(interaction);
                 break;
@@ -1624,7 +1645,7 @@ client.on('messageCreate', async (message) => {
     if (!message.guild) return;
 
     // Progressive penalty: skip scoring for blocked users
-    if (securityLogger.isUserBlocked(message.guild.id, message.author.id)) return;
+    if (await securityLogger.isUserBlocked(message.guild.id, message.author.id)) return;
 
     // Use module function to handle message
     await activityTrackerModule.handleMessage(message);
@@ -1636,7 +1657,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
     if (!reaction.message.guild) return;
 
     // Progressive penalty: skip scoring for blocked users
-    if (securityLogger.isUserBlocked(reaction.message.guild.id, user.id)) return;
+    if (await securityLogger.isUserBlocked(reaction.message.guild.id, user.id)) return;
 
     // Use module function to handle reaction
     await activityTrackerModule.handleReactionAdd(reaction, user);

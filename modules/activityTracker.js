@@ -18,6 +18,9 @@ const config = require('../config');
 const db = require('../database/db');
 const securityLogger = require('../utils/securityLogger');
 
+// Discord client reference (set via initActivityTracker)
+let discordClient = null;
+
 // Memory queue for activity events
 let activityQueue = [];
 
@@ -34,7 +37,7 @@ const voiceSessions = new Map();
 // Track user's last 10 messages (userId -> Array<string>)
 const userMessageHistory = new Map();
 const MESSAGE_HISTORY_SIZE = 10;
-const SIMILARITY_THRESHOLD = 0.8; // Similarity threshold (80%)
+const SIMILARITY_THRESHOLD = 0.7; // Similarity threshold (70% — stricter with Levenshtein)
 
 // ========== Anti-Farming: Reaction Pattern Tracking ==========
 // Track reaction counts per user per window (userId -> { count, windowStart, uniqueMessages })
@@ -51,15 +54,21 @@ const BASELINE_DAYS = 7; // Track last 7 days for baseline
 
 /**
  * Initialize activity tracker
+ * @param {Client} client - Discord client instance
  */
-function initActivityTracker() {
+function initActivityTracker(client = null) {
+  discordClient = client;
+
   // Start batch processing timer
   setInterval(processBatch, config.activity.queue.processInterval);
 
   // Start cleanup timer (clean up expired data every hour)
   setInterval(cleanupTrackingData, 3600000);
 
-  console.log(`✅ Activity tracker initialized (batch interval: ${config.activity.queue.processInterval}ms)`);
+  // Start periodic voice scoring (every 5 minutes)
+  setInterval(processVoiceSessions, 300000);
+
+  console.log(`✅ Activity tracker initialized (batch interval: ${config.activity.queue.processInterval}ms, voice checkpoint: 5min)`);
 }
 
 /**
@@ -112,7 +121,33 @@ function trackActivity(guildId, userId, type, value = 1) {
 }
 
 /**
- * Calculate similarity between two strings (Jaccard similarity)
+ * Calculate Levenshtein distance between two strings
+ * @param {string} a - String 1
+ * @param {string} b - String 2
+ * @returns {number} Edit distance
+ */
+function levenshteinDistance(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+/**
+ * Calculate similarity between two strings
+ * Uses Levenshtein distance for short messages, Jaccard for longer ones
  * @param {string} str1 - String 1
  * @param {string} str2 - String 2
  * @returns {number} Similarity (0-1)
@@ -120,13 +155,23 @@ function trackActivity(guildId, userId, type, value = 1) {
 function calculateSimilarity(str1, str2) {
   if (!str1 || !str2) return 0;
 
-  // Convert to lowercase and tokenize
-  const words1 = new Set(str1.toLowerCase().split(/\s+/));
-  const words2 = new Set(str2.toLowerCase().split(/\s+/));
+  const s1 = str1.toLowerCase().trim();
+  const s2 = str2.toLowerCase().trim();
 
-  // Calculate intersection
+  // For short messages (< 50 chars), use Levenshtein distance
+  // This catches "Hello 1" vs "Hello 2" style evasion
+  if (s1.length < 50 || s2.length < 50) {
+    const maxLen = Math.max(s1.length, s2.length);
+    if (maxLen === 0) return 1;
+    const dist = levenshteinDistance(s1, s2);
+    return 1 - (dist / maxLen);
+  }
+
+  // For longer messages, use Jaccard similarity (more efficient)
+  const words1 = new Set(s1.split(/\s+/));
+  const words2 = new Set(s2.split(/\s+/));
+
   const intersection = new Set([...words1].filter(x => words2.has(x)));
-  // Calculate union
   const union = new Set([...words1, ...words2]);
 
   return union.size > 0 ? intersection.size / union.size : 0;
@@ -179,15 +224,18 @@ function isGibberish(content) {
   if (/(.)\1{6,}/.test(text)) return true;
 
   // Check 2: Random consonant clusters without vowels (keyboard mashing)
-  // Only flag if the entire message looks like mashing
-  const words = text.split(/\s+/);
-  const mashCount = words.filter(w => {
-    const clean = w.replace(/[^a-zA-Z]/g, '').toLowerCase();
-    if (clean.length < 4) return false;
-    // No vowels in a 4+ letter word
-    return !/[aeiou]/i.test(clean);
-  }).length;
-  if (words.length > 0 && mashCount / words.length > 0.7 && words.length >= 2) return true;
+  // Skip this check if text contains CJK characters (Chinese/Japanese/Korean)
+  const hasCJK = /[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(text);
+  if (!hasCJK) {
+    const words = text.split(/\s+/);
+    const mashCount = words.filter(w => {
+      const clean = w.replace(/[^a-zA-Z]/g, '').toLowerCase();
+      if (clean.length < 4) return false;
+      // No vowels in a 4+ letter word
+      return !/[aeiou]/i.test(clean);
+    }).length;
+    if (words.length > 0 && mashCount / words.length > 0.7 && words.length >= 2) return true;
+  }
 
   // Check 3: Excessive special characters (>60% non-alphanumeric, non-space, non-CJK)
   const alphaNum = text.replace(/[\s\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/g, '');
@@ -379,6 +427,8 @@ async function handleVoiceStateUpdate(oldState, newState) {
   if (!oldState.channel && newState.channel) {
     voiceSessions.set(sessionKey, {
       joinTime: Date.now(),
+      lastCheckpoint: Date.now(),
+      channelId: newState.channel.id,
       muted: newState.selfMute || newState.serverMute,
       deafened: newState.selfDeaf || newState.serverDeaf,
     });
@@ -393,31 +443,80 @@ async function handleVoiceStateUpdate(oldState, newState) {
     }
   }
 
-  // User leaves voice channel
+  // User leaves voice channel — award remaining time since last checkpoint
   if (oldState.channel && !newState.channel) {
     const session = voiceSessions.get(sessionKey);
     if (session) {
-      const minutes = Math.floor((Date.now() - session.joinTime) / 60000);
+      const minutes = Math.floor((Date.now() - session.lastCheckpoint) / 60000);
 
-      // Anti-AFK: If user was muted AND deafened the entire time, count 0
-      // If only muted or only deafened, count at 50% rate
-      if (minutes > 0) {
-        let effectiveMinutes = minutes;
-        if (session.deafened && session.muted) {
-          effectiveMinutes = 0; // Full AFK — no credit
-        } else if (session.deafened || session.muted) {
-          effectiveMinutes = Math.floor(minutes * 0.5); // Partial credit
-        }
+      // Anti-AFK: Check if there were other non-bot users in the channel
+      const channelMembers = oldState.channel.members.filter(m => !m.user.bot && m.id !== userId);
+      const hasOtherUsers = channelMembers.size >= 1;
 
-        // Cap single session at 4 hours to prevent overnight AFK
-        effectiveMinutes = Math.min(effectiveMinutes, 240);
-
+      if (minutes > 0 && hasOtherUsers) {
+        const effectiveMinutes = calcEffectiveVoiceMinutes(minutes, session);
         if (effectiveMinutes > 0) {
           trackActivity(guildId, userId, 'voice', effectiveMinutes);
         }
       }
       voiceSessions.delete(sessionKey);
     }
+  }
+}
+
+/**
+ * Calculate effective voice minutes with AFK penalties
+ * @param {number} rawMinutes - Raw minutes
+ * @param {Object} session - Voice session data
+ * @returns {number} Effective minutes after penalties
+ */
+function calcEffectiveVoiceMinutes(rawMinutes, session) {
+  let effective = rawMinutes;
+  if (session.deafened && session.muted) {
+    effective = 0; // Full AFK — no credit
+  } else if (session.deafened || session.muted) {
+    effective = Math.floor(rawMinutes * 0.5); // Partial credit
+  }
+  // Cap at 4 hours per checkpoint cycle
+  return Math.min(effective, 240);
+}
+
+/**
+ * Periodic voice session scoring — awards points every 5 minutes
+ * to prevent total loss on crash
+ */
+async function processVoiceSessions() {
+  if (!discordClient || voiceSessions.size === 0) return;
+
+  const now = Date.now();
+
+  for (const [sessionKey, session] of voiceSessions.entries()) {
+    const minutes = Math.floor((now - session.lastCheckpoint) / 60000);
+    if (minutes < 1) continue;
+
+    const [guildId, userId] = sessionKey.split('_');
+
+    // Check if channel still has other users
+    try {
+      const guild = discordClient.guilds.cache.get(guildId);
+      if (!guild) continue;
+      const channel = guild.channels.cache.get(session.channelId);
+      if (!channel) continue;
+
+      const otherMembers = channel.members.filter(m => !m.user.bot && m.id !== userId);
+      if (otherMembers.size < 1) continue; // Alone — no credit
+
+      const effectiveMinutes = calcEffectiveVoiceMinutes(minutes, session);
+      if (effectiveMinutes > 0) {
+        trackActivity(guildId, userId, 'voice', effectiveMinutes);
+      }
+    } catch (e) {
+      // Channel fetch failed — skip this session
+      continue;
+    }
+
+    // Advance checkpoint regardless (so we don't re-count this interval)
+    session.lastCheckpoint = now;
   }
 }
 
