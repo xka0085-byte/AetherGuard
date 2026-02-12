@@ -19,7 +19,7 @@
     "leaderboard"
   ],
   "author": "",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "dependencies": {
     "alchemy-sdk": "^3.4.1",
     "sqlite3": "^5.1.7",
