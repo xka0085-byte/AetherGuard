@@ -6,8 +6,9 @@
 require('dotenv').config();
 const { Alchemy, Network } = require('alchemy-sdk');
 
-const WALLET = '0x258189b344DEf8293aa7aC47b0575AE344D5A830';
-const CONTRACT = '0x5E4943373c2198625BD441Ae0629E9E7b4FB4797';
+// Use environment variables or well-known public test addresses
+const WALLET = process.env.TEST_WALLET || '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'; // vitalik.eth (public)
+const CONTRACT = process.env.TEST_CONTRACT || '0x9d305a42A3975Ee4c1C57555BeD5919889DCE63F'; // Sandbox LAND (Polygon)
 
 async function testNetwork(networkName, network) {
     console.log(`\n=== Testing ${networkName} ===`);
@@ -67,11 +68,12 @@ async function testPolygonNFT() {
         console.log(`   Target contract NFT count: ${matchingNfts.length}`);
 
         // Search for similar contracts (first 6 characters match)
+        const contractPrefix = CONTRACT.slice(0, 8).toLowerCase();
         const similarNfts = allNfts.ownedNfts.filter(
-            nft => nft.contract.address.toLowerCase().startsWith('0x5e4943')
+            nft => nft.contract.address.toLowerCase().startsWith(contractPrefix)
         );
         if (similarNfts.length > 0) {
-            console.log(`   Similar contracts (0x5e4943...) NFT count: ${similarNfts.length}`);
+            console.log(`   Similar contracts (${contractPrefix}...) NFT count: ${similarNfts.length}`);
             similarNfts.forEach((nft, i) => {
                 console.log(`   ${i + 1}. Contract: ${nft.contract.address}, Name: ${nft.name || 'N/A'}`);
             });

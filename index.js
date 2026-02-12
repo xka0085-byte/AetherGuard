@@ -36,7 +36,9 @@ process.on('unhandledRejection', (reason, promise) => {
 
 process.on('uncaughtException', (error) => {
     console.error('💥 Uncaught Exception:', error);
-    // Keep the process alive, or rely on PM2 to restart
+    // Graceful shutdown: close database and exit, let PM2/systemd restart
+    try { db.close(); } catch (_) {}
+    process.exit(1);
 });
 
 // ============================================
